@@ -331,11 +331,11 @@ function handleIndividualSubmit(e) {
   const pdfFile = newFolder.createFile(pdfBlob).setName(pdfFileName);
 
   // メール本文を生成
-  const subject = "キッチンカー出店に関して： " + representative_name;
-  const emailBody = `xxx課
+  const subject = "キッチンカー出店に関して： " + representative_name + "さん";
+  const emailBody = `(提出先)課
   ご担当者様 (cc: ${representative_name}さん)
 
-  お世話になっております。xxx大学 △△です。
+  お世話になっております。△△大学 ooサークルです。
   
   この度、キッチンカー利用の申請をさせていただきたく、ご連絡いたしました。
 
@@ -343,14 +343,14 @@ function handleIndividualSubmit(e) {
 
   詳細につきましては、添付の資料をご確認いただけますと幸いです。
 
-  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。△△および代表である${representative_name}さんが対応させていただきます。
+  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。ooサークルおよび代表である${representative_name}さんが対応させていただきます。
 
   よろしくお願いいたします。
 
-  △△`;
+  ooサークル`;
 
   MailApp.sendEmail({
-    to: getProps().getProperty("UNIVERSITY_EMAIL"), // xxx課のメールアドレスに変更
+    to: getProps().getProperty("UNIVERSITY_EMAIL"), // (提出先)課のメールアドレスに変更
     cc: contact_mail,
     subject: subject,
     body: emailBody,
@@ -359,9 +359,9 @@ function handleIndividualSubmit(e) {
 
   // メールの件名と本文をまとめて定義
   const newEmailSubject = `タイムスケジュール及び持ち物チェックリスト作成のお願い： ${representative_name}`;
-  const newEmailBody = `${representative_name}さん （cc:○○代表）
+  const newEmailBody = `${representative_name}さん （cc:(施設責任者氏名)代表）
 
-  こんにちは、△△です。
+  こんにちは、ooサークルです。
 
   資料作成フォームにご記入いただき、ありがとうございます。
 
@@ -371,18 +371,18 @@ function handleIndividualSubmit(e) {
 
   記入が完了しましたら、このメールへの返信にてお知らせください。
 
-  参考までに、xxx課に提出したPDFを添付いたします。
+  参考までに、(提出先)課に提出したPDFを添付いたします。
 
-  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。△△およびキッチンカー利用の責任者であるoo代表が対応いたします。
+  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。ooサークルおよびキッチンカー利用の責任者である(施設責任者氏名)代表が対応いたします。
 
   よろしくお願いいたします。
 
-  △△`;
+  ooサークル`;
 
   // 新しいメールを送信
   MailApp.sendEmail({
     to: contact_mail,
-    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //oo代表のメールアドレス
+    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //(施設責任者氏名)代表のメールアドレス
     subject: newEmailSubject,
     body: newEmailBody,
     attachments: [pdfFile],
@@ -409,18 +409,20 @@ function endEmail() {
 
 function sendFormEmail(email, representativeName) {
   // スクリプトプロパティからフォームURLを取得
-  const formUrl = getProps().getProperty("SUBMISSION_FORM_URL");
+  const individual_formUrl = getProps().getProperty(
+    "INDIVIDUAL_SUBMISSION_FORM_URL"
+  );
 
   var bodyText = `
   ${representativeName}さん
 
-  こんにちは、△△です。
+  こんにちは、ooサークルです。
 
   キッチンカーでの販売、お疲れさまでした。
 
   今回のイベントの結果を学校側に報告するため、以下のフォームへの記入をお願いします。
 
-  フォームリンク：${formUrl}
+  フォームリンク：${individual_formUrl}
 
   このフォームに記載すると、自動的にドキュメントが生成され、書類が提出されます。
 
@@ -428,7 +430,7 @@ function sendFormEmail(email, representativeName) {
 
   よろしくお願いいたします。
 
-  △△
+  ooサークル
   `;
 
   // HTMLメールとして送信
@@ -739,10 +741,10 @@ function handleClubSubmission(e) {
 
   // メール本文を生成
   const subject = "キッチンカー出店に関して： " + club_name;
-  const emailBody = `xxx課
+  const emailBody = `(提出先)課
   ご担当者様 (cc: ${club_name} ${representative_name}さん)
 
-  お世話になっております。福井県立大学 △△です。
+  お世話になっております。△△大学 ooサークルです。
   
   この度、キッチンカー利用の申請をさせていただきたく、ご連絡いたしました。
 
@@ -750,14 +752,14 @@ function handleClubSubmission(e) {
 
   詳細につきましては、添付の資料をご確認いただけますと幸いです。
 
-  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。△△および${club_name}の代表である${representative_name}さんが対応させていただきます。
+  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。ooサークルおよび${club_name}の代表である${representative_name}さんが対応させていただきます。
 
   よろしくお願いいたします。
 
-  △△`;
+  ooサークル`;
 
   MailApp.sendEmail({
-    to: getProps().getProperty("UNIVERSITY_EMAIL"), // xxx課のメールアドレスに変更
+    to: getProps().getProperty("UNIVERSITY_EMAIL"), // (提出先)課のメールアドレスに変更
     cc: contact_mail,
     subject: subject,
     body: emailBody,
@@ -767,9 +769,9 @@ function handleClubSubmission(e) {
   // メールの件名と本文をまとめて定義
   const newEmailSubject = `タイムスケジュール及び持ち物チェックリスト作成のお願い： ${club_name}`;
   const newEmailBody = `${club_name}
-  ${representative_name}さん （cc:oo代表）
+  ${representative_name}さん （cc:(施設責任者氏名)代表）
 
-  こんにちは、△△です。
+  こんにちは、ooサークルです。
 
   資料作成フォームにご記入いただき、ありがとうございます。
 
@@ -779,18 +781,18 @@ function handleClubSubmission(e) {
 
   記入が完了しましたら、このメールへの返信にてお知らせください。
 
-  参考までに、xxx課に提出したPDFを添付いたします。
+  参考までに、(提出先)課に提出したPDFを添付いたします。
 
-  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。△△およびキッチンカー利用の責任者であるoo代表が対応させていただきます。
+  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。ooサークルおよびキッチンカー利用の責任者である(施設責任者氏名)代表が対応させていただきます。
 
   よろしくお願いいたします。
 
-  △△`;
+  ooサークル`;
 
   // 新しいメールを送信
   MailApp.sendEmail({
     to: contact_mail,
-    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //oo代表のメールアドレス
+    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //(施設責任者氏名)代表のメールアドレス
     subject: newEmailSubject,
     body: newEmailBody,
     attachments: [pdfFile],
@@ -818,19 +820,19 @@ function endEmail() {
 
 function sendFormEmail(email, clubName, representativeName) {
   // スクリプトプロパティからフォームURLを取得
-  const formUrl = getProps().getProperty("SUBMISSION_FORM_URL");
+  const club_formUrl = getProps().getProperty("CLUB_SUBMISSION_FORM_URL");
 
   var bodyText = `
   ${clubName}
   ${representativeName}さん
 
-  こんにちは、△△です。
+  こんにちは、ooサークルです。
 
   キッチンカーでの販売、お疲れさまでした。
 
   今回のイベントの結果を学校側に報告するため、以下のフォームへの記入をお願いします。
 
-  フォームリンク：${formUrl}
+  フォームリンク：${club_formUrl}
 
   このフォームに記載すると、自動的にドキュメントが生成され、書類が提出されます。
 
@@ -838,7 +840,7 @@ function sendFormEmail(email, clubName, representativeName) {
 
   よろしくお願いいたします。
 
-  △△
+  ooサークル
   `;
 
   // HTMLメールとして送信
@@ -884,5 +886,16 @@ function sendSlackNotification(mail, name, club_name, row) {
     Logger.log("✅ Slack通知送信成功");
   } catch (e) {
     Logger.log("❌ Slack通知送信失敗: " + e.message);
+  }
+}
+
+// --------------------------------------------共通------------------------------------------------
+
+// スクリプトプロパティ一覧表示
+function logScriptProperties() {
+  const props = getProps().getProperties();
+  Logger.log("📋 現在のスクリプトプロパティ一覧:");
+  for (const key in props) {
+    Logger.log(`${key} = ${props[key]}`);
   }
 }

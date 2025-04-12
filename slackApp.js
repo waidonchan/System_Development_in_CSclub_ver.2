@@ -258,7 +258,7 @@ function evaluateIndividualSubmission(channel, ts, stored) {
       const to = stored.mail;
       const subject = "【重要】キッチンカー利用承認のお知らせ";
       const body =
-        `${stored.name}さん（※このメールは○○代表にもccで送付しています）\nこんにちは、△△です。\n\n` +
+        `${stored.name}さん（※このメールは(施設責任者氏名)代表にもccで送付しています）\nこんにちは、ooサークルです。\n\n` +
         `この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございました。\n\n` +
         `審査の結果、キッチンカーのご利用が【承認】されましたので、お知らせいたします。\n\n` +
         `──────────────────────\n` +
@@ -271,15 +271,15 @@ function evaluateIndividualSubmission(channel, ts, stored) {
         `※提出が遅れると、学校側から出店を認められない場合がありますのでご注意ください。\n\n` +
         `② 前日準備について（厨房利用の連絡）\n` +
         `前日に仕込みを希望される場合は、学食の厨房をご利用いただきます。\n` +
-        `その際、キッチンカー運営責任者である○○さんに、事前にご連絡・ご相談をお願いいたします。\n` +
-        `ご返信の際は、冒頭に「○○様」などの宛名をご記載いただきますようお願いいたします。\n\n` +
+        `その際、キッチンカー運営責任者である(施設責任者氏名)さんに、事前にご連絡・ご相談をお願いいたします。\n` +
+        `ご返信の際は、冒頭に「(施設責任者氏名)様」などの宛名をご記載いただきますようお願いいたします。\n\n` +
         `【確認方法】\n` +
-        `・方法①：「全員に返信」で、このメールにご返信ください（ccに○○さんが含まれています）\n` +
-        `・方法②：○○代表のメールアドレスに直接ご連絡ください\n` +
+        `・方法①：「全員に返信」で、このメールにご返信ください（ccに(施設責任者氏名)さんが含まれています）\n` +
+        `・方法②：(施設責任者氏名)代表のメールアドレスに直接ご連絡ください\n` +
         `　▷ ${administrator_email}\n\n` +
-        `ご不明な点がありましたら、本メールにご返信いただくか、△△までお気軽にご連絡ください。\n\n` +
+        `ご不明な点がありましたら、本メールにご返信いただくか、ooサークルまでお気軽にご連絡ください。\n\n` +
         `今後とも、どうぞよろしくお願いいたします。\n\n` +
-        `△△`;
+        `ooサークル`;
 
       MailApp.sendEmail({
         to,
@@ -313,14 +313,15 @@ function remindIndividualUnprocessedMessages() {
 
   keys.forEach((key) => {
     const stored = JSON.parse(getProps().getProperty(key) || "{}");
+    const clubName = (stored.club_name || "").trim();
+    const isIndividual = clubName === "";
+    const isPending =
+      stored.status !== "approved" && stored.status !== "rejected";
 
-    if (stored.status !== "approved" && stored.status !== "rejected") {
+    if (isIndividual && isPending) {
       const [channel, ts] = key.split("_");
-      postToSlack(
-        channel,
-        ts,
-        `⏰ リマインド：この申請はまだ「承認」または「却下」されていません。スタンプで対応をお願いします！もし承認するのに不安があるようであれば、「却下」ボタンを押して、手動で ${stored.name} さん ( メールアドレス： ${stored.mail} ) まで確認メールを打ちましょう！`
-      );
+      const message = `${stored.name} さん ( メールアドレス： ${stored.mail} ) の申請はまだ「承認」または「却下」されていません。スタンプで対応をお願いします！`;
+      postReminderToThread(channel, ts, message);
     }
   });
 }
@@ -387,13 +388,15 @@ function postIndividualSlackMessage(message, mail, name, row) {
 
 function sendIndividualReminderToSlack() {
   Logger.log("🔔 リマインド処理を開始します");
+  let messagesSet = new Set();
 
   const sheet = getSheetByNameHon("リマインド");
   var today = new Date();
   var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
-  var messages = [];
 
   data.forEach(function (row, index) {
+    var clubName = row[0];
+    if (clubName && clubName.trim() !== "") return;
     var representativeName = row[1];
     var startTime = row[2];
     var startDayStr = row[3];
@@ -410,8 +413,8 @@ function sendIndividualReminderToSlack() {
     Logger.log(`📅 チェック中: ${representativeName}, 開始日: ${startDayStr}`);
 
     if (areDatesEqual(twoDaysBefore, today)) {
-      var message2Days = `リマインド：${representativeName}さんのキッチンカー利用予定日まであと二日です！！\n詳細はこちら：${sheetLink}`;
-      messages.push(message2Days);
+      var message2Days = `:alarm_clock: リマインド：${representativeName}さんのキッチンカー利用予定日まであと二日です！！\n詳細はこちら：${sheetLink}`;
+      messagesSet.add(message2Days);
       Logger.log(`✅ 二日前リマインド対象: ${representativeName}さん`);
       sendIndividualReminderEmail(
         email,
@@ -423,8 +426,8 @@ function sendIndividualReminderToSlack() {
     }
 
     if (areDatesEqual(oneWeekBefore, today)) {
-      var message1Week = `リマインド：${representativeName}さんのキッチンカー利用予定日まであと一週間です！\n詳細はこちら：${sheetLink}`;
-      messages.push(message1Week);
+      var message1Week = `:alarm_clock: リマインド：${representativeName}さんのキッチンカー利用予定日まであと一週間です！\n詳細はこちら：${sheetLink}`;
+      messagesSet.add(message1Week);
       Logger.log(`✅ 一週間前リマインド対象: ${representativeName}`);
       sendIndividualReminderEmail(
         email,
@@ -436,8 +439,9 @@ function sendIndividualReminderToSlack() {
     }
   });
 
-  if (messages.length > 0) {
-    var slackMessage = "以下のタスクの通知があります。\n" + messages.join("\n");
+  if (messagesSet.size > 0) {
+    const slackMessage =
+      "以下のタスクの通知があります。\n" + Array.from(messagesSet).join("\n");
     postSimpleSlackMessage(slackMessage);
     Logger.log("📤 Slackにリマインドを送信しました");
   } else {
@@ -455,7 +459,7 @@ function sendIndividualReminderEmail(
   var bodyText = `
   ${representativeName}さん
 
-  こんにちは、△△です。
+  こんにちは、ooサークルです。
 
   ${representativeName}さんのキッチンカー利用予定日が近づいております。あと少しで当日となりますね。 準備や確認事項がありましたら、ぜひこの機会にご確認ください。
 
@@ -467,7 +471,7 @@ function sendIndividualReminderEmail(
 
   何卒よろしくお願い申し上げます。
 
-  △△`;
+  ooサークル`;
 
   var htmlBody = bodyText.replace(/\n/g, "<br>");
 
@@ -509,7 +513,7 @@ function evaluateClubSubmission(channel, ts, stored) {
       const to = stored.mail;
       const subject = "【重要】キッチンカー利用承認のお知らせ";
       const body =
-        `${stored.club_name}\n${stored.name}さん（※このメールは○○代表にもccで送付しています）\nこんにちは、△△です。\n\n` +
+        `${stored.club_name}\n${stored.name}さん（※このメールは(施設責任者氏名)代表にもccで送付しています）\nこんにちは、ooサークルです。\n\n` +
         `この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございました。\n\n` +
         `審査の結果、キッチンカーのご利用が【承認】されましたので、お知らせいたします。\n\n` +
         `──────────────────────\n` +
@@ -522,15 +526,15 @@ function evaluateClubSubmission(channel, ts, stored) {
         `※提出が遅れると、学校側から出店を認められない場合がありますのでご注意ください。\n\n` +
         `② 前日準備について（厨房利用の連絡）\n` +
         `前日に仕込みを希望される場合は、学食の厨房をご利用いただきます。\n` +
-        `その際、キッチンカー運営責任者である○○さんに、事前にご連絡・ご相談をお願いいたします。\n` +
-        `ご返信の際は、冒頭に「○○様」などの宛名をご記載いただきますようお願いいたします。\n\n` +
+        `その際、キッチンカー運営責任者である(施設責任者氏名)さんに、事前にご連絡・ご相談をお願いいたします。\n` +
+        `ご返信の際は、冒頭に「(施設責任者氏名)様」などの宛名をご記載いただきますようお願いいたします。\n\n` +
         `【確認方法】\n` +
-        `・方法①：「全員に返信」で、このメールにご返信ください（ccに○○さんが含まれています）\n` +
-        `・方法②：○○代表のメールアドレスに直接ご連絡ください\n` +
+        `・方法①：「全員に返信」で、このメールにご返信ください（ccに(施設責任者氏名)さんが含まれています）\n` +
+        `・方法②：(施設責任者氏名)代表のメールアドレスに直接ご連絡ください\n` +
         `　▷ ${administrator_email}\n\n` +
-        `ご不明な点がありましたら、本メールにご返信いただくか、△△までお気軽にご連絡ください。\n\n` +
+        `ご不明な点がありましたら、本メールにご返信いただくか、ooサークルまでお気軽にご連絡ください。\n\n` +
         `今後とも、どうぞよろしくお願いいたします。\n\n` +
-        `△△`;
+        `ooサークル`;
 
       MailApp.sendEmail({
         to,
@@ -565,13 +569,15 @@ function remindClubUnprocessedMessages() {
   keys.forEach((key) => {
     const stored = JSON.parse(getProps().getProperty(key) || "{}");
 
-    if (stored.status !== "approved" && stored.status !== "rejected") {
+    const clubName = (stored.club_name || "").trim();
+    const isClub = clubName !== "";
+    const isPending =
+      stored.status !== "approved" && stored.status !== "rejected";
+
+    if (isClub && isPending) {
       const [channel, ts] = key.split("_");
-      postToSlack(
-        channel,
-        ts,
-        `⏰ リマインド：この申請はまだ「承認」または「却下」されていません。スタンプで対応をお願いします！もし承認するのに不安があるようであれば、「却下」ボタンを押して、手動で ${stored.club_name} の ${stored.name} さん ( メールアドレス： ${stored.mail} ) まで確認メールを打ちましょう！`
-      );
+      const message = `この申請はまだ「承認」または「却下」されていません。スタンプで対応をお願いします！もし承認するのに不安があるようであれば、「却下」ボタンを押して、手動で ${stored.club_name} の ${stored.name} さん ( メールアドレス： ${stored.mail} ) まで確認メールを打ちましょう！`;
+      postReminderToThread(channel, ts, message);
     }
   });
 }
@@ -638,11 +644,11 @@ function postClubSlackMessage(message, mail, name, club_name, row) {
 
 function sendClubReminderToSlack() {
   Logger.log("🔔 リマインド処理を開始します");
+  let messagesSet = new Set();
 
   const sheet = getSheetByNameHon("リマインド");
   var today = new Date();
   var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
-  var messages = [];
 
   data.forEach(function (row, index) {
     var clubName = row[0];
@@ -661,9 +667,11 @@ function sendClubReminderToSlack() {
 
     Logger.log(`📅 チェック中: ${clubName}, 開始日: ${startDayStr}`);
 
+    if (!clubName || clubName.trim() === "") return;
+
     if (areDatesEqual(twoDaysBefore, today)) {
-      var message2Days = `リマインド：${clubName}のキッチンカー利用予定日まであと二日です！！\n詳細はこちら：${sheetLink}`;
-      messages.push(message2Days);
+      var message2Days = `:alarm_clock: リマインド：${clubName}のキッチンカー利用予定日まであと二日です！！\n詳細はこちら：${sheetLink}`;
+      messagesSet.add(message2Days);
       Logger.log(`✅ 二日前リマインド対象: ${clubName}`);
       sendClubReminderEmail(
         email,
@@ -676,8 +684,8 @@ function sendClubReminderToSlack() {
     }
 
     if (areDatesEqual(oneWeekBefore, today)) {
-      var message1Week = `リマインド：${clubName}のキッチンカー利用予定日まであと一週間です！\n詳細はこちら：${sheetLink}`;
-      messages.push(message1Week);
+      var message1Week = `:alarm_clock: リマインド：${clubName}のキッチンカー利用予定日まであと一週間です！\n詳細はこちら：${sheetLink}`;
+      messagesSet.add(message1Week);
       Logger.log(`✅ 一週間前リマインド対象: ${clubName}`);
       sendClubReminderEmail(
         email,
@@ -690,8 +698,9 @@ function sendClubReminderToSlack() {
     }
   });
 
-  if (messages.length > 0) {
-    var slackMessage = "以下のタスクの通知があります。\n" + messages.join("\n");
+  if (messagesSet.size > 0) {
+    var slackMessage =
+      "以下のタスクの通知があります。\n" + Array.from(messagesSet).join("\n");
     postSimpleSlackMessage(slackMessage);
     Logger.log("📤 Slackにリマインドを送信しました");
   } else {
@@ -711,7 +720,7 @@ function sendClubReminderEmail(
   ${clubName}
   ${representativeName}さん
 
-  こんにちは、△△です。
+  こんにちは、ooサークルです。
 
   ${clubName}のキッチンカー利用予定日が近づいております。あと少しで当日となりますね。 準備や確認事項がありましたら、ぜひこの機会にご確認ください。
 
@@ -723,7 +732,7 @@ function sendClubReminderEmail(
 
   何卒よろしくお願い申し上げます。
 
-  △△`;
+  ooサークル`;
 
   var htmlBody = bodyText.replace(/\n/g, "<br>");
 
@@ -807,6 +816,35 @@ function postToSlack(channel, thread_ts, text) {
     }
   } catch (err) {
     Logger.log("GASエラー: " + err.message);
+  }
+}
+
+function postReminderToThread(channel, ts, message) {
+  const url = "https://slack.com/api/chat.postMessage";
+  const payload = {
+    channel: channel,
+    thread_ts: ts,
+    text: `:alarm_clock: リマインド：${message}`,
+  };
+
+  const options = {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      Authorization: `Bearer ${getSlackToken()}`,
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const result = JSON.parse(response.getContentText());
+    if (!result.ok) {
+      Logger.log("⚠️ リマインド投稿失敗: " + result.error);
+    }
+  } catch (err) {
+    Logger.log("❌ スレッド投稿エラー: " + err.message);
   }
 }
 
