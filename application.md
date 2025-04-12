@@ -39,7 +39,8 @@
 | `CALENDAR_ID`                | Google カレンダー ID                |
 | `UNIVERSITY_EMAIL`           | 提出先（大学）のメールアドレス      |
 | `ADMINISTRATOR_EMAIL`        | 柴田代表のメールアドレス            |
-| `SUBMISSION_FORM_URL`        | 提出用フォームの URL                |
+| `SUBMISSION_FORM_URL`        | 報告書提出用(団体用)フォームの URL  |
+| `SUBMISSION_FORM_URL`        | 報告書提出用(個人用)フォームの URL  |
 
 3. フォーム送信時のトリガーとして `onFormSubmit` を設定する
 

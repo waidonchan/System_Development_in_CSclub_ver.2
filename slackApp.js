@@ -1,14 +1,5 @@
-/**
- * Slack Webhook受信用スクリプト（統合バージョン）
- * - スタンプ反応による承認/却下処理
- * - 外部スクリプトからの通知投稿
- * - SlackアプリのURL検証対応
- */
-
-// キャッシュ用変数
 let cachedProps = null;
 
-// プロパティ取得関数
 function getProps() {
   if (!cachedProps) {
     cachedProps = PropertiesService.getScriptProperties();
@@ -16,831 +7,546 @@ function getProps() {
   return cachedProps;
 }
 
-function getSlackToken() {
-  return getProps().getProperty("SLACK_TOKEN");
-}
-const APPROVED_REACTIONS = ["cs_マル", "管理者_マル"];
-const REJECTED_REACTIONS = ["cs_バツ", "管理者_バツ"];
-const MESSAGES_KEY = "TARGET_MESSAGES"; // 全監視対象メッセージリスト
-
-function getSheetByNameKari(sheetName) {
-  const sheetId = getProps().getProperty("SPREADSHEET_ID_KARI");
-  return SpreadsheetApp.openById(sheetId).getSheetByName(sheetName);
-}
-
-function getSheetByNameHon(sheetName) {
-  const sheetId = getProps().getProperty("SPREADSHEET_ID_HON");
-  return SpreadsheetApp.openById(sheetId).getSheetByName(sheetName);
+// 列7が空欄の場合は個人用処理
+function onFormSubmit(e) {
+  var club_or_individual = e.values[7]; // 列7（サークル名）が空欄の場合は個人用処理
+  if (!club_or_individual || club_or_individual.trim() === "") {
+    handleIndividualSubmission(e);
+    Logger.log("個人用の通知を受け取りました");
+  } else {
+    handleClubSubmission(e);
+    Logger.log("団体用の通知を受け取りました");
+  }
 }
 
-function doPost(e) {
-  try {
-    const data = JSON.parse(e.postData.contents);
-    Logger.log("📩 Slackからの受信データ: " + JSON.stringify(data));
+// ---------------------------------------------------個人用------------------------------------------------------------------
 
-    // -------------------------------
-    // 🔹 SlackのURL検証（最初の登録時）
-    // -------------------------------
-    if (data.type === "url_verification") {
-      Logger.log("✅ Slack URL確認成功");
-      return ContentService.createTextOutput(data.challenge).setMimeType(
-        ContentService.MimeType.TEXT
+function handleIndividualSubmission(e) {
+  Logger.log("個人用の通知です");
+  var values = e.values;
+  var name = values[6];
+  var rawScore = values[2];
+  var score = parseInt(rawScore.split("/")[0].trim());
+  var responsible = values[8]; // 食品衛生責任者を取得
+  var quiz = values[50]; // ひっかけクイズを取得
+  var mail = values[1]; // メールアドレスを取得
+  var row = e.range.getRow(); // 行番号を取得
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+
+  // 条件分岐の処理
+  if (score === 1 && responsible === "はい" && quiz === "") {
+    // ★ 33点満点、responsibleが「はい」、quizが空欄の場合：元の処理を実行
+    try {
+      executeIndividualOriginalProcess(values, row);
+    } catch (err) {
+      Logger.log(
+        "❌ executeIndividualOriginalProcess 実行中にエラー: " + err.message
       );
     }
-
-    // -------------------------------
-    // 🔹 外部スクリプトからの通知投稿
-    // -------------------------------
-    if (data.type === "external_notification") {
-      const { message, mail, name, club_name, row } = data;
-
-      if (!message || !mail || !name || typeof row === "undefined") {
-        Logger.log("⚠️ external_notificationに必要なデータが不足しています");
-        return ContentService.createTextOutput("Missing parameters");
-      }
-
-      // ▼ 処理の分岐（club_nameが未定義 or 空文字なら個人用）
-      if (club_name === "") {
-        Logger.log("📨 個人申請としてSlackに通知を投稿します");
-        postIndividualSlackMessage(message, mail, name, row); // ← 新しい関数に分けてもOK
-      } else {
-        Logger.log("📨 団体申請としてSlackに通知を投稿します");
-        postClubSlackMessage(message, mail, name, club_name, row);
-      }
-
-      return ContentService.createTextOutput("Slack投稿完了").setMimeType(
-        ContentService.MimeType.TEXT
-      );
-    }
-
-    // -------------------------------
-    // 🔹 Slackからのイベント（リアクションなど）
-    // -------------------------------
-    if (data.type === "event_callback") {
-      const event = data.event;
-
-      Logger.log("📝 イベントタイプ: " + event.type);
-
-      // reaction に対する処理
-      if (
-        event.type === "reaction_added" ||
-        event.type === "reaction_removed"
-      ) {
-        Logger.log(
-          `🎯 リアクション ${event.type}: ${event.reaction} by ${event.user}`
-        );
-        upsertReaction(event);
-        return ContentService.createTextOutput("OK").setMimeType(
-          ContentService.MimeType.TEXT
-        );
-      }
-
-      // 他のイベントタイプがあればここに追加
-      Logger.log("ℹ️ 未処理のイベントタイプ: " + event.type);
-      return ContentService.createTextOutput(
-        "Unhandled event type"
-      ).setMimeType(ContentService.MimeType.TEXT);
-    }
-
-    // -------------------------------
-    // 🔹 未対応のリクエストタイプ
-    // -------------------------------
-    Logger.log("⚠️ 未対応のリクエスト: " + JSON.stringify(data));
-    return ContentService.createTextOutput(
-      "Unsupported request type"
-    ).setMimeType(ContentService.MimeType.TEXT);
-  } catch (err) {
-    Logger.log("❌ doPost エラー: " + err.toString());
-    return ContentService.createTextOutput("error").setMimeType(
-      ContentService.MimeType.TEXT
+  } else if (score === 1 && responsible === "はい" && quiz === "読みました。") {
+    // ★ 33点満点、responsibleが「はい」、quizが「読みました。」の場合：行の色をグレーにし、不合格通知をメールで送信
+    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
+    sendMail(
+      mail,
+      "仮申請審査結果：不合格",
+      generateIndividualRejectionMessage("quiz_failed", name)
+    );
+  } else if (score === 1 && responsible === "いいえ") {
+    // ★ 33点満点、responsibleが「いいえ」の場合：行の色をグレーにし、不合格通知をメールで送信
+    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
+    sendMail(
+      mail,
+      "仮申請審査結果：不合格",
+      generateIndividualRejectionMessage("no_responsible", name)
+    );
+  } else if (score < 1 && responsible === "はい") {
+    // ★ 33点未満、responsibleが「はい」の場合：行の色をグレーにし、不合格通知をメールで送信
+    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
+    sendMail(
+      mail,
+      "仮申請審査結果：不合格",
+      generateIndividualRejectionMessage("low_score", name)
+    );
+  } else if (score < 1 && responsible === "いいえ") {
+    // ★ 33点未満、responsibleが「いいえ」の場合：行の色をグレーにし、不合格通知をメールで送信
+    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
+    sendMail(
+      mail,
+      "仮申請審査結果：不合格",
+      generateIndividualRejectionMessage("low_score_no_responsible", name)
     );
   }
 }
 
-function evaluateMessageStatus(channel, ts, stored) {
-  if (!stored.hasOwnProperty("club_name") || stored.club_name.trim() === "") {
-    return evaluateIndividualSubmission(channel, ts, stored);
-  } else {
-    return evaluateClubSubmission(channel, ts, stored);
+// 元の処理を実行する関数
+function executeIndividualOriginalProcess(values, row) {
+  var individual = " (個人利用希望) ";
+
+  var stamp = values[0]; // タイムスタンプを取得
+  var mail = values[1]; // メールアドレスを取得
+  var score = values[2]; // 点数を取得
+  var faculty = values[3]; // 学部を取得
+  var department = values[4]; // 学科を取得
+  var grade = values[5]; // 学年を取得
+  var name = values[6]; // 名前を取得
+  var club_name = values[7]; //サークル名を取得
+  var responsible = values[8]; // 食品衛生責任者を取得
+  var purpose = values[9]; // 目的を取得
+  var hygiene = values[10]; // 衛生管理を取得
+  var start_day = values[11]; // 出店日を取得
+  var befor_preparation = values[12]; // 前日準備を取得
+  var sale_image = values[13]; // 販売物の写真を取得
+  var sale_image2 = values[14]; // 販売物の写真を取得
+  var sale_image3 = values[15]; // 販売物の写真を取得
+  var information = values[16]; // 販売物の情報を取得
+
+  var quiz = values[50]; // ひっかけクイズを取得
+  var memo = values[51]; // 備考を取得
+
+  // 写真を挿入
+  sale_image = sale_image.replace("https://drive.google.com/open?id=", "");
+  let attachImg = DriveApp.getFileById(sale_image).getBlob();
+
+  if (sale_image2) {
+    sale_image2 = sale_image2.replace("https://drive.google.com/open?id=", "");
+    var attachImg2 = DriveApp.getFileById(sale_image2).getBlob();
   }
-}
 
-function isToday(date) {
-  const today = new Date(); // 現在の日付・時刻を取得（例: 2025年4月10日 22:00 など）
+  if (sale_image3) {
+    sale_image3 = sale_image3.replace("https://drive.google.com/open?id=", "");
+    var attachImg3 = DriveApp.getFileById(sale_image3).getBlob();
+  }
 
-  return (
-    date instanceof Date && // dateがちゃんとDateオブジェクトであることを確認
-    date.getFullYear() === today.getFullYear() && // 年が同じか
-    date.getMonth() === today.getMonth() && // 月が同じか（0〜11で表現される）
-    date.getDate() === today.getDate() // 日付が同じか
+  // テンプレートドキュメントのIDを指定
+  const templateDocId = getProps().getProperty("TEMPLATE_DOC_ID");
+  const templateDoc = DriveApp.getFileById(templateDocId);
+  const newDoc = templateDoc.makeCopy("一次選考合格者 - " + name);
+  const newDocId = newDoc.getId();
+  const doc = DocumentApp.openById(newDocId);
+  const body = doc.getBody();
+
+  // ドキュメントの内容を置換
+  body.replaceText("{{点数}}", score);
+  body.replaceText("{{学部}}", faculty);
+  body.replaceText("{{学科}}", department);
+  body.replaceText("{{学年}}", grade);
+  body.replaceText("{{名前}}", name);
+  body.replaceText("{{サークル名}}", individual);
+  body.replaceText("{{メールアドレス}}", mail);
+  body.replaceText("{{食品衛生責任者}}", responsible);
+  body.replaceText("{{目的}}", purpose);
+  body.replaceText("{{衛生管理}}", hygiene);
+  body.replaceText("{{出店日}}", start_day);
+  body.replaceText("{{前日準備}}", befor_preparation);
+  body.replaceText("{{販売物情報}}", information);
+  body.replaceText("{{備考}}", memo);
+
+  // 画像の縦横比を取得
+  let res = ImgApp.getSize(attachImg);
+  let width = res.width;
+  let height = res.height;
+  // 画像を横300pxでアスペクト比を揃えて大きさを編集し最終行へ挿入
+  body
+    .appendImage(attachImg)
+    .setWidth(300)
+    .setHeight((300 * height) / width);
+
+  // 2枚目の画像が存在する場合、挿入
+  if (attachImg2) {
+    let res2 = ImgApp.getSize(attachImg2);
+    let width2 = res2.width;
+    let height2 = res2.height;
+    body
+      .appendImage(attachImg2)
+      .setWidth(300)
+      .setHeight((300 * height2) / width2);
+  }
+
+  // 3枚目の画像が存在する場合、挿入
+  if (attachImg3) {
+    let res3 = ImgApp.getSize(attachImg3);
+    let width3 = res3.width;
+    let height3 = res3.height;
+    body
+      .appendImage(attachImg3)
+      .setWidth(300)
+      .setHeight((300 * height3) / width3);
+  }
+
+  // ドキュメントを保存して閉じる
+  doc.saveAndClose();
+
+  // 生成されたドキュメントを指定フォルダに移動
+  const destinationFolderId = getProps().getProperty("DESTINATION_FOLDER_ID");
+  const destinationFolder = DriveApp.getFolderById(destinationFolderId);
+  DriveApp.getFileById(newDocId).moveTo(destinationFolder);
+
+  // 新しく作成したドキュメントのURLを取得
+  const newDocUrl = "https://docs.google.com/document/d/" + newDocId;
+
+  // ドキュメントの共有設定
+  DriveApp.getFileById(newDocId).setSharing(
+    DriveApp.Access.ANYONE_WITH_LINK,
+    DriveApp.Permission.EDIT
   );
+
+  // Slack通知メッセージの作成
+  const message =
+    `<!channel>\n` +
+    `*${name}* さんがキッチンカーの仮申請に *合格* しました！以下のURLから情報を確認し、リアクションスタンプで対応をお願いします。\n\n` +
+    `📌 *【ooサークル】* \n` +
+    `　✅ 承認 → :cs_マル:\n` +
+    `　❌ 却下 → :cs_バツ:\n\n` +
+    `📌 *【(施設責任者氏名)さん】* \n` +
+    `　✅ 承認 → :管理者_マル:\n` +
+    `　❌ 却下 → :管理者_バツ:\n\n` +
+    `────────────────────────────────────\n` +
+    `✅ *「:cs_マル:」と「:管理者_マル:」の両方が押された場合* → *承認処理* が実行され、申請者に *合格通知メール* が送られます。\n\n` +
+    `❌ *「:cs_バツ:」または「:管理者_バツ:」が押された場合* → *却下処理* が実行されます。（申請者にはメールが送られません）\n\n` +
+    `💡 判断に迷った場合は「却下スタンプ（:cs_バツ: or :管理者_バツ:）」を押し、手動で ${name} さん ( メールアドレス： ${mail} ) に確認を取りましょう。\n` +
+    `────────────────────────────────────\n\n` +
+    `🔍 *${name} さんの詳細はこちら：* \n` +
+    `${newDocUrl}`;
+  // Slackに通知を送信
+  sendSlackNotification(message, mail, name, "", row);
+
+  // 一時的にスクリプトを停止
+  Utilities.sleep(10000);
 }
 
-// slackへのリマインドメッセージ
-function sendReminderToSlack() {
-  const sheet = getSheetByNameHon("リマインド");
-  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues(); // 1行目は見出しなので除く
-  const today = new Date();
+// 条件に応じたメールの本文を生成
+// 条件に応じたメールの本文を生成
+function generateIndividualRejectionMessage(caseType, name) {
+  var greeting = name + "様\n\n";
 
-  data.forEach((row, index) => {
-    const clubName = row[0]; // A列（空欄なら個人）
-    const name = row[1]; // B列（代表者名）
-    const startTime = row[2]; // C列
-    const startDate = row[3]; // D列
-    const twoDaysBefore = row[4]; // E列
-    const oneWeekBefore = row[5]; // F列
-    const endDate = row[6]; // G列
-    const sheetUrl = row[7]; // H列
-    const email = row[8]; // I列
+  switch (caseType) {
+    case "quiz_failed":
+      return (
+        greeting +
+        "この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございます。\n\n" +
+        "残念ながら、選考の結果不合格となりました。\n" +
+        "再挑戦を希望される場合は、問題文をよくお読みのうえ、再度ご応募いただけますと幸いです。\n\n" +
+        "どうぞよろしくお願いいたします\n\n" +
+        "ooサークル"
+      );
 
-    const rowIndex = index + 2; // 実際の行番号
+    case "no_responsible":
+      return (
+        greeting +
+        "この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございます。\n\n" +
+        "残念ながら、食品衛生責任者の資格をお持ちでないため、選考の結果不合格となりました。\n" +
+        "資格を取得された後、再度ご応募いただけますと幸いです。\n\n" +
+        "どうぞよろしくお願いいたします\n\n" +
+        "ooサークル"
+      );
 
-    if (isToday(twoDaysBefore) || isToday(oneWeekBefore)) {
-      if (!clubName || clubName.trim() === "") {
-        // 👤 個人用通知
-        sendIndividualReminderToSlack(
-          name,
-          startDate,
-          startTime,
-          sheetUrl,
-          email,
-          rowIndex
-        );
-      } else {
-        // 🏢 団体用通知
-        sendClubReminderToSlack(
-          clubName,
-          name,
-          startDate,
-          startTime,
-          sheetUrl,
-          email,
-          rowIndex
-        );
-      }
-    }
-  });
-}
+    case "low_score":
+      return (
+        greeting +
+        "この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございます。\n\n" +
+        "残念ながら、得点が基準に達していないため、選考の結果不合格となりました。\n" +
+        "再挑戦を希望される場合は、マニュアルなどを参考にし、再度ご応募いただけますと幸いです。\n\n" +
+        "どうぞよろしくお願いいたします\n\n" +
+        "ooサークル"
+      );
 
-function remindUnprocessedMessages() {
-  const keys = JSON.parse(getProps().getProperty(MESSAGES_KEY) || "[]");
+    case "low_score_no_responsible":
+      return (
+        greeting +
+        "この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございます。\n\n" +
+        "食品衛生責任者の資格をお持ちでないこと、また得点が基準に達していないことを考慮した結果、残念ながら不合格となりました。\n" +
+        "資格を取得し、マニュアルなどをよくお読みの上、再挑戦していただけますと幸いです。\n\n" +
+        "どうぞよろしくお願いいたします\n\n" +
+        "ooサークル"
+      );
 
-  let hasClub = false;
-  let hasIndividual = false;
-
-  for (const key of keys) {
-    const storedStr = getProps().getProperty(key);
-    if (!storedStr) continue;
-
-    const stored = JSON.parse(storedStr);
-    const status = stored.status;
-
-    if (status === "approved" || status === "rejected") continue;
-
-    const isIndividual = !stored.club_name || stored.club_name.trim() === "";
-    const isClub = stored.club_name && stored.club_name.trim() !== "";
-
-    if (isIndividual) {
-      hasIndividual = true;
-    } else if (isClub) {
-      hasClub = true;
-    }
-
-    // 最適化：両方確認できたら早期終了
-    if (hasIndividual && hasClub) break;
+    default:
+      return "";
   }
-
-  if (hasIndividual && !hasClub) {
-    Logger.log("✅ 個人リマインド 実行完了");
-    remindIndividualUnprocessedMessages();
-  } else if (hasClub && !hasIndividual) {
-    Logger.log("✅ 団体リマインド 実行完了");
-    remindClubUnprocessedMessages();
-  } else if (hasIndividual && hasClub) {
-    Logger.log("✅ 両方リマインド 実行開始");
-    remindIndividualUnprocessedMessages();
-    remindClubUnprocessedMessages();
-    Logger.log("✅ 両方リマインド 実行完了");
-  } else {
-    Logger.log("ℹ️ 未処理の申請はありませんでした");
-  }
-
-  Logger.log("✅ remindUnprocessedMessages 実行完了");
 }
 
-// 個人用----------------------------------------------------------------------------------------------
+// -----------------------------------------------団体用------------------------------------------------------
 
-function evaluateIndividualSubmission(channel, ts, stored) {
-  const reactions = stored.reactions || [];
-  const messageKey = `${channel}_${ts}`;
-  const approved = APPROVED_REACTIONS.every((r) => reactions.includes(r));
-  const rejected = REJECTED_REACTIONS.some((r) => reactions.includes(r));
+function handleClubSubmission(e) {
+  var values = e.values;
+  var name = values[6];
+  var rawScore = values[2];
+  var score = parseInt(rawScore.split("/")[0].trim());
+  var responsible = values[8]; // 食品衛生責任者を取得
+  var quiz = values[50]; // ひっかけクイズを取得
+  var mail = values[1]; // メールアドレスを取得
+  var club_name = values[7]; // サークル名を取得
+  var row = e.range.getRow(); // 行番号を取得
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
 
-  if (approved) {
-    postToSlack(
-      channel,
-      ts,
-      `✅ 承認されました！${stored.mail} に承認されたことを通知しました！`
+  // 条件分岐の処理
+  if (score === 1 && responsible === "はい" && quiz === "") {
+    // ★ 33点満点、responsibleが「はい」、quizが空欄の場合：元の処理を実行
+    try {
+      executeClubOriginalProcess(values, row);
+    } catch (err) {
+      Logger.log(
+        "❌ executeClubOriginalProcess 実行中にエラー: " + err.message
+      );
+    }
+  } else if (score === 1 && responsible === "はい" && quiz === "読みました。") {
+    // ★ 33点満点、responsibleが「はい」、quizが「読みました。」の場合：行の色をグレーにし、不合格通知をメールで送信
+    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
+    sendMail(
+      mail,
+      "仮申請審査結果：不合格",
+      generateClubRejectionMessage("quiz_failed", club_name, name)
     );
-    stored.status = "approved";
-    getProps().setProperty(messageKey, JSON.stringify(stored));
-
-    // ★ スプレッドシートの行を緑に
-    const row = parseInt(stored.row);
-    const sheet = getSheetByNameKari("フォームの回答 1");
-    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("#d9ead3");
-
-    // ★ メール送信
-    if (stored.mail && stored.name) {
-      const administrator_email = getProps().getProperty("ADMINISTRATOR_EMAIL");
-      const formUrl = getProps().getProperty("FOLLOWUP_FORM_URL");
-
-      const to = stored.mail;
-      const subject = "【重要】キッチンカー利用承認のお知らせ";
-      const body =
-        `${stored.name}さん（※このメールは○○代表にもccで送付しています）\nこんにちは、△△です。\n\n` +
-        `この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございました。\n\n` +
-        `審査の結果、キッチンカーのご利用が【承認】されましたので、お知らせいたします。\n\n` +
-        `──────────────────────\n` +
-        `■ 今後のご対応について\n` +
-        `──────────────────────\n\n` +
-        `①学校への提出資料について\n` +
-        `下記のフォームにご回答ください。\n` +
-        `＊回答期限：販売日の2週間前まで\n\n` +
-        `フォームURL：${formUrl}\n\n` +
-        `※提出が遅れると、学校側から出店を認められない場合がありますのでご注意ください。\n\n` +
-        `② 前日準備について（厨房利用の連絡）\n` +
-        `前日に仕込みを希望される場合は、学食の厨房をご利用いただきます。\n` +
-        `その際、キッチンカー運営責任者である○○さんに、事前にご連絡・ご相談をお願いいたします。\n` +
-        `ご返信の際は、冒頭に「○○様」などの宛名をご記載いただきますようお願いいたします。\n\n` +
-        `【確認方法】\n` +
-        `・方法①：「全員に返信」で、このメールにご返信ください（ccに○○さんが含まれています）\n` +
-        `・方法②：○○代表のメールアドレスに直接ご連絡ください\n` +
-        `　▷ ${administrator_email}\n\n` +
-        `ご不明な点がありましたら、本メールにご返信いただくか、△△までお気軽にご連絡ください。\n\n` +
-        `今後とも、どうぞよろしくお願いいたします。\n\n` +
-        `△△`;
-
-      MailApp.sendEmail({
-        to,
-        cc: administrator_email,
-        subject,
-        body,
-      });
-    }
-    return;
-  }
-
-  if (rejected) {
-    postToSlack(
-      channel,
-      ts,
-      `❌ この申請は却下されました。却下理由は何ですか？まとまったら ${stored.name}さん (メールアドレス： ${stored.mail} ) にその内容を伝えましょう！`
+  } else if (score === 1 && responsible === "いいえ") {
+    // ★ 33点満点、responsibleが「いいえ」の場合：行の色をグレーにし、不合格通知をメールで送信
+    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
+    sendMail(
+      mail,
+      "仮申請審査結果：不合格",
+      generateClubRejectionMessage("no_responsible", club_name, name)
     );
-    stored.status = "rejected";
-    getProps().setProperty(messageKey, JSON.stringify(stored));
-
-    // ★ スプレッドシートの行を赤に
-    const row = parseInt(stored.row);
-    const sheet = getSheetByNameKari("フォームの回答 1");
-    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("#f4cccc");
-  }
-}
-
-// ▼ リマインド処理：未処理メッセージに毎日通知
-function remindIndividualUnprocessedMessages() {
-  const keys = JSON.parse(getProps().getProperty(MESSAGES_KEY) || "[]");
-
-  keys.forEach((key) => {
-    const stored = JSON.parse(getProps().getProperty(key) || "{}");
-
-    if (stored.status !== "approved" && stored.status !== "rejected") {
-      const [channel, ts] = key.split("_");
-      postToSlack(
-        channel,
-        ts,
-        `⏰ リマインド：この申請はまだ「承認」または「却下」されていません。スタンプで対応をお願いします！もし承認するのに不安があるようであれば、「却下」ボタンを押して、手動で ${stored.name} さん ( メールアドレス： ${stored.mail} ) まで確認メールを打ちましょう！`
-      );
-    }
-  });
-}
-
-// slackに通知を送る関数
-// ▼ フォーム送信時：Slackにメッセージ投稿 & メッセージキーを保存
-function postIndividualSlackMessage(message, mail, name, row) {
-  const channel = getProps().getProperty("CHANNEL_ID");
-
-  const url = "https://slack.com/api/chat.postMessage";
-  const payload = {
-    channel,
-    text: message,
-  };
-
-  const options = {
-    method: "post",
-    contentType: "application/json",
-    headers: {
-      Authorization: `Bearer ${getSlackToken()}`,
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true,
-  };
-
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const result = JSON.parse(response.getContentText());
-    if (!result.ok) {
-      Logger.log("❌ Slack投稿失敗: " + result.error);
-    }
-
-    if (result.ok) {
-      const messageKey = `${result.channel}_${result.ts}`;
-
-      // ✅ メッセージ一覧に追記
-      const all = JSON.parse(getProps().getProperty(MESSAGES_KEY) || "[]");
-      all.push(messageKey);
-      getProps().setProperty(MESSAGES_KEY, JSON.stringify(all));
-
-      // ✅ 初期データを保存（ここが重要！）
-      getProps().setProperty(
-        messageKey,
-        JSON.stringify({
-          type: "申請",
-          mail,
-          name,
-          row,
-          club_name: "",
-        })
-      );
-
-      Logger.log("Slackに投稿し、監視対象に追加: " + messageKey);
-    } else {
-      Logger.log("Slack投稿エラー: " + result.error);
-      Logger.log(`❌ Slack投稿失敗 (HTTP ${response.getResponseCode()})`);
-      Logger.log(`📩 レスポンス本文: ${response.getContentText()}`);
-      Logger.log(`🔤 エラー内容: ${result.error}`);
-    }
-  } catch (err) {
-    Logger.log("❌ Slack通信エラー: " + err.message);
-  }
-}
-
-function sendIndividualReminderToSlack() {
-  Logger.log("🔔 リマインド処理を開始します");
-
-  const sheet = getSheetByNameHon("リマインド");
-  var today = new Date();
-  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
-  var messages = [];
-
-  data.forEach(function (row, index) {
-    var representativeName = row[1];
-    var startTime = row[2];
-    var startDayStr = row[3];
-    var twoDaysBeforeStr = row[4];
-    var oneWeekBeforeStr = row[5];
-    var endDate = row[6];
-    var sheetLink = row[7];
-    var email = row[8];
-
-    var startDay = new Date(startDayStr);
-    var twoDaysBefore = new Date(twoDaysBeforeStr);
-    var oneWeekBefore = new Date(oneWeekBeforeStr);
-
-    Logger.log(`📅 チェック中: ${representativeName}, 開始日: ${startDayStr}`);
-
-    if (areDatesEqual(twoDaysBefore, today)) {
-      var message2Days = `リマインド：${representativeName}さんのキッチンカー利用予定日まであと二日です！！\n詳細はこちら：${sheetLink}`;
-      messages.push(message2Days);
-      Logger.log(`✅ 二日前リマインド対象: ${representativeName}さん`);
-      sendIndividualReminderEmail(
-        email,
-        "リマインド：キッチンカー利用予定日（2日前）",
-        message2Days,
-        sheetLink,
-        representativeName
-      );
-    }
-
-    if (areDatesEqual(oneWeekBefore, today)) {
-      var message1Week = `リマインド：${representativeName}さんのキッチンカー利用予定日まであと一週間です！\n詳細はこちら：${sheetLink}`;
-      messages.push(message1Week);
-      Logger.log(`✅ 一週間前リマインド対象: ${representativeName}`);
-      sendIndividualReminderEmail(
-        email,
-        "リマインド：キッチンカー利用予定日（一週間前）",
-        message1Week,
-        sheetLink,
-        representativeName
-      );
-    }
-  });
-
-  if (messages.length > 0) {
-    var slackMessage = "以下のタスクの通知があります。\n" + messages.join("\n");
-    postSimpleSlackMessage(slackMessage);
-    Logger.log("📤 Slackにリマインドを送信しました");
-  } else {
-    Logger.log("ℹ️ 本日のリマインド対象はありませんでした");
-  }
-}
-
-function sendIndividualReminderEmail(
-  email,
-  subject,
-  message,
-  sheetLink,
-  representativeName
-) {
-  var bodyText = `
-  ${representativeName}さん
-
-  こんにちは、△△です。
-
-  ${representativeName}さんのキッチンカー利用予定日が近づいております。あと少しで当日となりますね。 準備や確認事項がありましたら、ぜひこの機会にご確認ください。
-
-  こちらのリンクから、最終調整用のスプレッドシートをご確認いただけます： ${sheetLink}
-
-  このメールは自動送信されていますので、返信はご遠慮ください。 ご質問がある場合は、先日お送りいたしました最終調整用のメールにご返信いただけますよう、お願いいたします。
-
-  当日が楽しいイベントとなりますことを願っております。
-
-  何卒よろしくお願い申し上げます。
-
-  △△`;
-
-  var htmlBody = bodyText.replace(/\n/g, "<br>");
-
-  MailApp.sendEmail({
-    to: email,
-    subject: subject,
-    body: bodyText,
-    htmlBody: htmlBody,
-  });
-}
-
-// 団体用----------------------------------------------------------------------------------------------
-
-function evaluateClubSubmission(channel, ts, stored) {
-  const reactions = stored.reactions || [];
-  const messageKey = `${channel}_${ts}`;
-  const approved = APPROVED_REACTIONS.every((r) => reactions.includes(r));
-  const rejected = REJECTED_REACTIONS.some((r) => reactions.includes(r));
-
-  if (approved) {
-    postToSlack(
-      channel,
-      ts,
-      `✅ 承認されました！${stored.mail} に承認されたことを通知しました！`
+  } else if (score < 1 && responsible === "はい") {
+    // ★ 33点未満、responsibleが「はい」の場合：行の色をグレーにし、不合格通知をメールで送信
+    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
+    sendMail(
+      mail,
+      "仮申請審査結果：不合格",
+      generateClubRejectionMessage("low_score", club_name, name)
     );
-    stored.status = "approved";
-    getProps().setProperty(messageKey, JSON.stringify(stored));
-
-    // ★ スプレッドシートの行を緑に
-    const row = parseInt(stored.row);
-    const sheet = getSheetByNameKari("フォームの回答 1");
-    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("#d9ead3");
-
-    // ★ メール送信
-    if (stored.mail && stored.name && stored.club_name) {
-      const administrator_email = getProps().getProperty("ADMINISTRATOR_EMAIL");
-      const formUrl = getProps().getProperty("FOLLOWUP_FORM_URL");
-
-      const to = stored.mail;
-      const subject = "【重要】キッチンカー利用承認のお知らせ";
-      const body =
-        `${stored.club_name}\n${stored.name}さん（※このメールは○○代表にもccで送付しています）\nこんにちは、△△です。\n\n` +
-        `この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございました。\n\n` +
-        `審査の結果、キッチンカーのご利用が【承認】されましたので、お知らせいたします。\n\n` +
-        `──────────────────────\n` +
-        `■ 今後のご対応について\n` +
-        `──────────────────────\n\n` +
-        `①学校への提出資料について\n` +
-        `下記のフォームにご回答ください。\n` +
-        `＊回答期限：販売日の2週間前まで\n\n` +
-        `フォームURL：${formUrl}\n\n` +
-        `※提出が遅れると、学校側から出店を認められない場合がありますのでご注意ください。\n\n` +
-        `② 前日準備について（厨房利用の連絡）\n` +
-        `前日に仕込みを希望される場合は、学食の厨房をご利用いただきます。\n` +
-        `その際、キッチンカー運営責任者である○○さんに、事前にご連絡・ご相談をお願いいたします。\n` +
-        `ご返信の際は、冒頭に「○○様」などの宛名をご記載いただきますようお願いいたします。\n\n` +
-        `【確認方法】\n` +
-        `・方法①：「全員に返信」で、このメールにご返信ください（ccに○○さんが含まれています）\n` +
-        `・方法②：○○代表のメールアドレスに直接ご連絡ください\n` +
-        `　▷ ${administrator_email}\n\n` +
-        `ご不明な点がありましたら、本メールにご返信いただくか、△△までお気軽にご連絡ください。\n\n` +
-        `今後とも、どうぞよろしくお願いいたします。\n\n` +
-        `△△`;
-
-      MailApp.sendEmail({
-        to,
-        cc: administrator_email,
-        subject,
-        body,
-      });
-    }
-    return;
-  }
-
-  if (rejected) {
-    postToSlack(
-      channel,
-      ts,
-      `❌ この申請は却下されました。却下理由は何ですか？まとまったら ${stored.club_name}の${stored.name}さん (メールアドレス： ${stored.mail} ) にその内容を伝えましょう！`
-    );
-    stored.status = "rejected";
-    getProps().setProperty(messageKey, JSON.stringify(stored));
-
-    // ★ スプレッドシートの行を赤に
-    const row = parseInt(stored.row);
-    const sheet = getSheetByNameKari("フォームの回答 1");
-    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("#f4cccc");
-  }
-}
-
-// ▼ リマインド処理：未処理メッセージに毎日通知
-function remindClubUnprocessedMessages() {
-  const keys = JSON.parse(getProps().getProperty(MESSAGES_KEY) || "[]");
-
-  keys.forEach((key) => {
-    const stored = JSON.parse(getProps().getProperty(key) || "{}");
-
-    if (stored.status !== "approved" && stored.status !== "rejected") {
-      const [channel, ts] = key.split("_");
-      postToSlack(
-        channel,
-        ts,
-        `⏰ リマインド：この申請はまだ「承認」または「却下」されていません。スタンプで対応をお願いします！もし承認するのに不安があるようであれば、「却下」ボタンを押して、手動で ${stored.club_name} の ${stored.name} さん ( メールアドレス： ${stored.mail} ) まで確認メールを打ちましょう！`
-      );
-    }
-  });
-}
-
-// slackに通知を送る関数
-// ▼ フォーム送信時：Slackにメッセージ投稿 & メッセージキーを保存
-function postClubSlackMessage(message, mail, name, club_name, row) {
-  const channel = getProps().getProperty("CHANNEL_ID");
-
-  const url = "https://slack.com/api/chat.postMessage";
-  const payload = {
-    channel,
-    text: message,
-  };
-
-  const options = {
-    method: "post",
-    contentType: "application/json",
-    headers: {
-      Authorization: `Bearer ${getSlackToken()}`,
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true,
-  };
-
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const result = JSON.parse(response.getContentText());
-    if (!result.ok) {
-      Logger.log("❌ Slack投稿失敗: " + result.error);
-    }
-
-    if (result.ok) {
-      const messageKey = `${result.channel}_${result.ts}`;
-
-      // ✅ メッセージ一覧に追記
-      const all = JSON.parse(getProps().getProperty(MESSAGES_KEY) || "[]");
-      all.push(messageKey);
-      getProps().setProperty(MESSAGES_KEY, JSON.stringify(all));
-
-      // ✅ 初期データを保存（ここが重要！）
-      getProps().setProperty(
-        messageKey,
-        JSON.stringify({
-          type: "申請",
-          mail,
-          name,
-          club_name,
-          row,
-        })
-      );
-
-      Logger.log("Slackに投稿し、監視対象に追加: " + messageKey);
-    } else {
-      Logger.log("Slack投稿エラー: " + result.error);
-      Logger.log(`❌ Slack投稿失敗 (HTTP ${response.getResponseCode()})`);
-      Logger.log(`📩 レスポンス本文: ${response.getContentText()}`);
-      Logger.log(`🔤 エラー内容: ${result.error}`);
-    }
-  } catch (err) {
-    Logger.log("❌ Slack通信エラー: " + err.message);
-  }
-}
-
-function sendClubReminderToSlack() {
-  Logger.log("🔔 リマインド処理を開始します");
-
-  const sheet = getSheetByNameHon("リマインド");
-  var today = new Date();
-  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
-  var messages = [];
-
-  data.forEach(function (row, index) {
-    var clubName = row[0];
-    var representativeName = row[1];
-    var startTime = row[2];
-    var startDayStr = row[3];
-    var twoDaysBeforeStr = row[4];
-    var oneWeekBeforeStr = row[5];
-    var endDate = row[6];
-    var sheetLink = row[7];
-    var email = row[8];
-
-    var startDay = new Date(startDayStr);
-    var twoDaysBefore = new Date(twoDaysBeforeStr);
-    var oneWeekBefore = new Date(oneWeekBeforeStr);
-
-    Logger.log(`📅 チェック中: ${clubName}, 開始日: ${startDayStr}`);
-
-    if (areDatesEqual(twoDaysBefore, today)) {
-      var message2Days = `リマインド：${clubName}のキッチンカー利用予定日まであと二日です！！\n詳細はこちら：${sheetLink}`;
-      messages.push(message2Days);
-      Logger.log(`✅ 二日前リマインド対象: ${clubName}`);
-      sendClubReminderEmail(
-        email,
-        "リマインド：キッチンカー利用予定日（2日前）",
-        message2Days,
-        sheetLink,
-        representativeName,
-        clubName
-      );
-    }
-
-    if (areDatesEqual(oneWeekBefore, today)) {
-      var message1Week = `リマインド：${clubName}のキッチンカー利用予定日まであと一週間です！\n詳細はこちら：${sheetLink}`;
-      messages.push(message1Week);
-      Logger.log(`✅ 一週間前リマインド対象: ${clubName}`);
-      sendClubReminderEmail(
-        email,
-        "リマインド：キッチンカー利用予定日（一週間前）",
-        message1Week,
-        sheetLink,
-        representativeName,
-        clubName
-      );
-    }
-  });
-
-  if (messages.length > 0) {
-    var slackMessage = "以下のタスクの通知があります。\n" + messages.join("\n");
-    postSimpleSlackMessage(slackMessage);
-    Logger.log("📤 Slackにリマインドを送信しました");
-  } else {
-    Logger.log("ℹ️ 本日のリマインド対象はありませんでした");
-  }
-}
-
-function sendClubReminderEmail(
-  email,
-  subject,
-  message,
-  sheetLink,
-  representativeName,
-  clubName
-) {
-  var bodyText = `
-  ${clubName}
-  ${representativeName}さん
-
-  こんにちは、△△です。
-
-  ${clubName}のキッチンカー利用予定日が近づいております。あと少しで当日となりますね。 準備や確認事項がありましたら、ぜひこの機会にご確認ください。
-
-  こちらのリンクから、最終調整用のスプレッドシートをご確認いただけます： ${sheetLink}
-
-  このメールは自動送信されていますので、返信はご遠慮ください。 ご質問がある場合は、先日お送りいたしました最終調整用のメールにご返信いただけますよう、お願いいたします。
-
-  当日が楽しいイベントとなりますことを願っております。
-
-  何卒よろしくお願い申し上げます。
-
-  △△`;
-
-  var htmlBody = bodyText.replace(/\n/g, "<br>");
-
-  MailApp.sendEmail({
-    to: email,
-    subject: subject,
-    body: bodyText,
-    htmlBody: htmlBody,
-  });
-}
-
-// --------------------------------------------------------------------------------------------------------------------
-
-function upsertReaction(event) {
-  const { item, reaction, user, type } = event;
-  const channel = item.channel;
-  const ts = item.ts;
-  const messageKey = `${channel}_${ts}`;
-
-  // 対象スタンプ以外は無視
-  const isTargetReaction =
-    APPROVED_REACTIONS.includes(reaction) ||
-    REJECTED_REACTIONS.includes(reaction);
-
-  if (!isTargetReaction) return;
-
-  const stored = JSON.parse(getProps().getProperty(messageKey) || "{}");
-  if (!stored.reactions) stored.reactions = [];
-
-  // GASが送信した「申請メッセージ」でなければ無視
-  if (stored.type !== "申請") return;
-  if (stored.status === "approved" || stored.status === "rejected") return;
-
-  const index = stored.reactions.indexOf(reaction);
-
-  if (type === "reaction_added") {
-    if (index === -1) stored.reactions.push(reaction);
-    postToSlack(
-      channel,
-      ts,
-      `✅ <@${user}> さんが「:${reaction}:」リアクションを追加しました！`
-    );
-  } else if (type === "reaction_removed") {
-    if (index !== -1) stored.reactions.splice(index, 1);
-    postToSlack(
-      channel,
-      ts,
-      `❎ <@${user}> さんが「:${reaction}:」リアクションを削除しました！`
+  } else if (score < 1 && responsible === "いいえ") {
+    // ★ 33点未満、responsibleが「いいえ」の場合：行の色をグレーにし、不合格通知をメールで送信
+    sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
+    sendMail(
+      mail,
+      "仮申請審査結果：不合格",
+      generateClubRejectionMessage("low_score_no_responsible", club_name, name)
     );
   }
-
-  getProps().setProperty(messageKey, JSON.stringify(stored));
-
-  evaluateMessageStatus(channel, ts, stored);
 }
 
-// Slackにスレッド返信を送信
-function postToSlack(channel, thread_ts, text) {
-  const url = "https://slack.com/api/chat.postMessage";
-  const payload = {
-    channel,
-    thread_ts,
-    text,
-  };
+// 元の処理を実行する関数
+function executeClubOriginalProcess(values, row) {
+  var stamp = values[0]; // タイムスタンプを取得
+  var mail = values[1]; // メールアドレスを取得
+  var score = values[2]; // 点数を取得
+  var faculty = values[3]; // 学部を取得
+  var department = values[4]; // 学科を取得
+  var grade = values[5]; // 学年を取得
+  var name = values[6]; // 名前を取得
+  var club_name = values[7]; //サークル名を取得
+  var responsible = values[8]; // 食品衛生責任者を取得
+  var purpose = values[9]; // 目的を取得
+  var hygiene = values[10]; // 衛生管理を取得
+  var start_day = values[11]; // 出店日を取得
+  var befor_preparation = values[12]; // 前日準備を取得
+  var sale_image = values[13]; // 販売物の写真を取得
+  var sale_image2 = values[14]; // 販売物の写真を取得
+  var sale_image3 = values[15]; // 販売物の写真を取得
+  var information = values[16]; // 販売物の情報を取得
 
-  const options = {
-    method: "post",
-    contentType: "application/json",
-    headers: {
-      Authorization: `Bearer ${getSlackToken()}`,
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true,
-  };
+  var quiz = values[50]; // ひっかけクイズを取得
+  var memo = values[51]; // 備考を取得
 
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const result = JSON.parse(response.getContentText());
-    if (!result.ok) {
-      Logger.log("Slack投稿エラー: " + result.error);
-    }
-  } catch (err) {
-    Logger.log("GASエラー: " + err.message);
+  // 写真を挿入
+  sale_image = sale_image.replace("https://drive.google.com/open?id=", "");
+  let attachImg = DriveApp.getFileById(sale_image).getBlob();
+
+  if (sale_image2) {
+    sale_image2 = sale_image2.replace("https://drive.google.com/open?id=", "");
+    var attachImg2 = DriveApp.getFileById(sale_image2).getBlob();
   }
-}
 
-function areDatesEqual(date1, date2) {
-  return (
-    date1.getFullYear() === date2.getFullYear() &&
-    date1.getMonth() === date2.getMonth() &&
-    date1.getDate() === date2.getDate()
+  if (sale_image3) {
+    sale_image3 = sale_image3.replace("https://drive.google.com/open?id=", "");
+    var attachImg3 = DriveApp.getFileById(sale_image3).getBlob();
+  }
+
+  // テンプレートドキュメントのIDを指定
+  const templateDocId = getProps().getProperty("TEMPLATE_DOC_ID");
+  const templateDoc = DriveApp.getFileById(templateDocId);
+  const newDoc = templateDoc.makeCopy("一次選考合格者 - " + club_name);
+  const newDocId = newDoc.getId();
+  const doc = DocumentApp.openById(newDocId);
+  const body = doc.getBody();
+
+  // ドキュメントの内容を置換
+  body.replaceText("{{点数}}", score);
+  body.replaceText("{{サークル名}}", club_name);
+  body.replaceText("{{学部}}", faculty);
+  body.replaceText("{{学科}}", department);
+  body.replaceText("{{学年}}", grade);
+  body.replaceText("{{名前}}", name);
+  body.replaceText("{{メールアドレス}}", mail);
+  body.replaceText("{{食品衛生責任者}}", responsible);
+  body.replaceText("{{目的}}", purpose);
+  body.replaceText("{{衛生管理}}", hygiene);
+  body.replaceText("{{出店日}}", start_day);
+  body.replaceText("{{前日準備}}", befor_preparation);
+  body.replaceText("{{販売物情報}}", information);
+  body.replaceText("{{備考}}", memo);
+
+  // 画像の縦横比を取得
+  let res = ImgApp.getSize(attachImg);
+  let width = res.width;
+  let height = res.height;
+  // 画像を横300pxでアスペクト比を揃えて大きさを編集し最終行へ挿入
+  body
+    .appendImage(attachImg)
+    .setWidth(300)
+    .setHeight((300 * height) / width);
+
+  // 2枚目の画像が存在する場合、挿入
+  if (attachImg2) {
+    let res2 = ImgApp.getSize(attachImg2);
+    let width2 = res2.width;
+    let height2 = res2.height;
+    body
+      .appendImage(attachImg2)
+      .setWidth(300)
+      .setHeight((300 * height2) / width2);
+  }
+
+  // 3枚目の画像が存在する場合、挿入
+  if (attachImg3) {
+    let res3 = ImgApp.getSize(attachImg3);
+    let width3 = res3.width;
+    let height3 = res3.height;
+    body
+      .appendImage(attachImg3)
+      .setWidth(300)
+      .setHeight((300 * height3) / width3);
+  }
+
+  // ドキュメントを保存して閉じる
+  doc.saveAndClose();
+
+  // 生成されたドキュメントを指定フォルダに移動
+  const destinationFolderId = getProps().getProperty("DESTINATION_FOLDER_ID");
+  const destinationFolder = DriveApp.getFolderById(destinationFolderId);
+  DriveApp.getFileById(newDocId).moveTo(destinationFolder);
+
+  // 新しく作成したドキュメントのURLを取得
+  const newDocUrl = "https://docs.google.com/document/d/" + newDocId;
+
+  // ドキュメントの共有設定
+  DriveApp.getFileById(newDocId).setSharing(
+    DriveApp.Access.ANYONE_WITH_LINK,
+    DriveApp.Permission.EDIT
   );
+
+  // Slack通知メッセージの作成
+  const message =
+    `<!channel>\n` +
+    `*${club_name}* がキッチンカーの仮申請に *合格* しました！以下のURLから情報を確認し、リアクションスタンプで対応をお願いします。\n\n` +
+    `📌 *【ooサークル】* \n` +
+    `　✅ 承認 → :cs_マル:\n` +
+    `　❌ 却下 → :cs_バツ:\n\n` +
+    `📌 *【(施設責任者氏名)さん】* \n` +
+    `　✅ 承認 → :管理者_マル:\n` +
+    `　❌ 却下 → :管理者_バツ:\n\n` +
+    `────────────────────────────────────\n` +
+    `✅ *「:cs_マル:」と「:管理者_マル:」の両方が押された場合* → *承認処理* が実行され、申請者に *合格通知メール* が送られます。\n\n` +
+    `❌ *「:cs_バツ:」または「:管理者_バツ:」が押された場合* → *却下処理* が実行されます。（申請者にはメールが送られません）\n\n` +
+    `💡 判断に迷った場合は「却下スタンプ（:cs_バツ: or :管理者_バツ:）」を押し、手動で ${club_name} の ${name} さん ( メールアドレス： ${mail} ) に確認を取りましょう。\n` +
+    `────────────────────────────────────\n\n` +
+    `🔍 *${club_name} の詳細はこちら：* \n` +
+    `${newDocUrl}`;
+  // Slackに通知を送信
+  sendSlackNotification(message, mail, name, club_name, row);
+
+  // 一時的にスクリプトを停止
+  Utilities.sleep(10000);
 }
 
-function postSimpleSlackMessage(message) {
-  const url = "https://slack.com/api/chat.postMessage";
-  const channel = getProps().getProperty("CHANNEL_ID");
+// 条件に応じたメールの本文を生成
+// 条件に応じたメールの本文を生成 (club_nameを追加)
+function generateClubRejectionMessage(caseType, club_name, name) {
+  var greeting = club_name + "\n" + name + "様\n\n";
+
+  switch (caseType) {
+    case "quiz_failed":
+      return (
+        greeting +
+        "この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございます。\n\n" +
+        "残念ながら、選考の結果不合格となりました。\n" +
+        "再挑戦を希望される場合は、問題文をよくお読みのうえ、再度ご応募いただけますと幸いです。\n\n" +
+        "どうぞよろしくお願いいたします\n\n" +
+        "ooサークル"
+      );
+
+    case "no_responsible":
+      return (
+        greeting +
+        "この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございます。\n\n" +
+        "残念ながら、食品衛生責任者の資格をお持ちでないため、選考の結果不合格となりました。\n" +
+        "資格を取得された後、再度ご応募いただけますと幸いです。\n\n" +
+        "どうぞよろしくお願いいたします\n\n" +
+        "ooサークル"
+      );
+
+    case "low_score":
+      return (
+        greeting +
+        "この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございます。\n\n" +
+        "残念ながら、得点が基準に達していないため、選考の結果不合格となりました。\n" +
+        "再挑戦を希望される場合は、マニュアルなどを参考にし、再度ご応募いただけますと幸いです。\n\n" +
+        "どうぞよろしくお願いいたします\n\n" +
+        "ooサークル"
+      );
+
+    case "low_score_no_responsible":
+      return (
+        greeting +
+        "この度はキッチンカー利用の仮申請フォームにご回答いただき、誠にありがとうございます。\n\n" +
+        "食品衛生責任者の資格をお持ちでないこと、また得点が基準に達していないことを考慮した結果、残念ながら不合格となりました。\n" +
+        "資格を取得し、マニュアルなどをよくお読みの上、再挑戦していただけますと幸いです。\n\n" +
+        "どうぞよろしくお願いいたします\n\n" +
+        "ooサークル"
+      );
+
+    default:
+      return "";
+  }
+}
+
+// ------------------------------------------------共通--------------------------------------------------------------
+
+function sendSlackNotification(message, mail, name, club_name, row) {
+  Logger.log("📨 Slack通知関数が呼ばれました");
+  Logger.log("🔤 message: " + message);
+
+  const webhookUrl = getProps().getProperty("WEBHOOK_URL"); // Slack専用スクリプトのURL
+
   const payload = {
-    channel,
-    text: message,
+    type: "external_notification",
+    message,
+    mail,
+    name,
+    club_name,
+    row,
   };
+
   const options = {
     method: "post",
     contentType: "application/json",
-    headers: {
-      Authorization: `Bearer ${getSlackToken()}`,
-    },
     payload: JSON.stringify(payload),
     muteHttpExceptions: true,
   };
+
   try {
-    const response = UrlFetchApp.fetch(url, options);
-    const result = JSON.parse(response.getContentText());
-    if (!result.ok) {
-      Logger.log("Slack投稿失敗: " + result.error);
-    }
+    const response = UrlFetchApp.fetch(webhookUrl, options);
+    Logger.log("Slack通知レスポンス: " + response.getContentText());
+    Logger.log("✅ Slack通知送信成功");
   } catch (e) {
-    Logger.log("Slack投稿エラー: " + e.message);
+    Logger.log("❌ Slack通知送信失敗: " + e.message);
   }
+}
+
+// メール送信を行う関数
+function sendMail(to, subject, body) {
+  MailApp.sendEmail({
+    to: to,
+    subject: subject,
+    body: body,
+  });
 }
