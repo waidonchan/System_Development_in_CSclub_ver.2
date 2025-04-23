@@ -86,15 +86,15 @@ function onFormSubmit(e) {
   
   先日、キッチンカー販売を行っていた、${club_name}の報告書を提出いたします。
 
-  ご不明点がございましたら、このメールへの返信にてお知らせください。CSサークルおよび${club_name}の代表である${representative_name}さんが対応させていただきます。
+  ご不明点がございましたら、このメールへの返信にてお知らせください。ooサークルおよび${club_name}の代表である${representative_name}さんが対応させていただきます。
 
   よろしくお願いいたします。
 
-  CSサークル`;
+  ooサークル`;
 
   // メールを送信
   MailApp.sendEmail({
-    to: getProps().getProperty("UNIVERSITY_EMAIL"), // 就職・生活支援課のメールアドレス
+    to: getProps().getProperty("UNIVERSITY_EMAIL"), // (提出先)課のメールアドレス
     cc: contact_mail,
     subject: subject,
     body: emailBody,

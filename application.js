@@ -357,10 +357,10 @@ function handleIndividualSubmit(e) {
 
   // メール本文を生成
   const subject = "キッチンカー出店に関して： " + representative_name + "さん";
-  const emailBody = `就職・生活支援課
+  const emailBody = `(提出先)課
   ご担当者様 (cc: ${representative_name}さん)
 
-  お世話になっております。福井県立大学 CSサークルです。
+  お世話になっております。△△大学 ooサークルです。
   
   この度、キッチンカー利用の申請をさせていただきたく、ご連絡いたしました。
 
@@ -368,14 +368,14 @@ function handleIndividualSubmit(e) {
 
   詳細につきましては、添付の資料をご確認いただけますと幸いです。
 
-  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。CSサークルおよび代表である${representative_name}さんが対応させていただきます。
+  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。ooサークルおよび代表である${representative_name}さんが対応させていただきます。
 
   よろしくお願いいたします。
 
-  CSサークル`;
+  ooサークル`;
 
   MailApp.sendEmail({
-    to: getProps().getProperty("UNIVERSITY_EMAIL"), // 就職・生活支援課のメールアドレスに変更
+    to: getProps().getProperty("UNIVERSITY_EMAIL"), // (提出先)課のメールアドレスに変更
     cc: contact_mail,
     subject: subject,
     body: emailBody,
@@ -384,9 +384,9 @@ function handleIndividualSubmit(e) {
 
   // メールの件名と本文をまとめて定義
   const newEmailSubject = `タイムスケジュール及び持ち物チェックリスト作成のお願い： ${representative_name}`;
-  const newEmailBody = `${representative_name}さん （cc:柴田代表）
+  const newEmailBody = `${representative_name}さん （cc:(施設責任者氏名)代表）
 
-  こんにちは、CSサークルです。
+  こんにちは、ooサークルです。
 
   資料作成フォームにご記入いただき、ありがとうございます。
 
@@ -396,18 +396,18 @@ function handleIndividualSubmit(e) {
 
   記入が完了しましたら、このメールへの返信にてお知らせください。
 
-  参考までに、就職・生活支援課に提出したPDFを添付いたします。
+  参考までに、(提出先)課に提出したPDFを添付いたします。
 
-  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。CSサークルおよびキッチンカー利用の責任者である柴田代表が対応いたします。
+  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。ooサークルおよびキッチンカー利用の責任者である(施設責任者氏名)代表が対応いたします。
 
   よろしくお願いいたします。
 
-  CSサークル`;
+  ooサークル`;
 
   // 新しいメールを送信
   MailApp.sendEmail({
     to: contact_mail,
-    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //柴田代表のメールアドレス
+    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //(施設責任者氏名)代表のメールアドレス
     subject: newEmailSubject,
     body: newEmailBody,
     attachments: [pdfFile],
@@ -423,7 +423,7 @@ function individual_sendFormEmail(email, representativeName) {
   var bodyText = `
   ${representativeName}さん
 
-  こんにちは、CSサークルです。
+  こんにちは、ooサークルです。
 
   キッチンカーでの販売、お疲れさまでした。
 
@@ -437,7 +437,7 @@ function individual_sendFormEmail(email, representativeName) {
 
   よろしくお願いいたします。
 
-  CSサークル
+  ooサークル
   `;
 
   // HTMLメールとして送信
@@ -744,10 +744,10 @@ function handleClubSubmission(e) {
 
   // メール本文を生成
   const subject = "キッチンカー出店に関して： " + club_name;
-  const emailBody = `就職・生活支援課
+  const emailBody = `(提出先)課
   ご担当者様 (cc: ${club_name} ${representative_name}さん)
 
-  お世話になっております。福井県立大学 CSサークルです。
+  お世話になっております。△△大学 ooサークルです。
   
   この度、キッチンカー利用の申請をさせていただきたく、ご連絡いたしました。
 
@@ -755,14 +755,14 @@ function handleClubSubmission(e) {
 
   詳細につきましては、添付の資料をご確認いただけますと幸いです。
 
-  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。CSサークルおよび${club_name}の代表である${representative_name}さんが対応させていただきます。
+  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。ooサークルおよび${club_name}の代表である${representative_name}さんが対応させていただきます。
 
   よろしくお願いいたします。
 
-  CSサークル`;
+  ooサークル`;
 
   MailApp.sendEmail({
-    to: getProps().getProperty("UNIVERSITY_EMAIL"), // 就職・生活支援課のメールアドレスに変更
+    to: getProps().getProperty("UNIVERSITY_EMAIL"), // (提出先)課のメールアドレスに変更
     cc: contact_mail,
     subject: subject,
     body: emailBody,
@@ -772,9 +772,9 @@ function handleClubSubmission(e) {
   // メールの件名と本文をまとめて定義
   const newEmailSubject = `タイムスケジュール及び持ち物チェックリスト作成のお願い： ${club_name}`;
   const newEmailBody = `${club_name}
-  ${representative_name}さん （cc:柴田代表）
+  ${representative_name}さん （cc:(施設責任者氏名)代表）
 
-  こんにちは、CSサークルです。
+  こんにちは、ooサークルです。
 
   資料作成フォームにご記入いただき、ありがとうございます。
 
@@ -784,18 +784,18 @@ function handleClubSubmission(e) {
 
   記入が完了しましたら、このメールへの返信にてお知らせください。
 
-  参考までに、就職・生活支援課に提出したPDFを添付いたします。
+  参考までに、(提出先)課に提出したPDFを添付いたします。
 
-  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。CSサークルおよびキッチンカー利用の責任者である柴田代表が対応させていただきます。
+  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。ooサークルおよびキッチンカー利用の責任者である(施設責任者氏名)代表が対応させていただきます。
 
   よろしくお願いいたします。
 
-  CSサークル`;
+  ooサークル`;
 
   // 新しいメールを送信
   MailApp.sendEmail({
     to: contact_mail,
-    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //柴田代表のメールアドレス
+    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //(施設責任者氏名)代表のメールアドレス
     subject: newEmailSubject,
     body: newEmailBody,
     attachments: [pdfFile],
@@ -810,7 +810,7 @@ function club_sendFormEmail(email, clubName, representativeName) {
   ${clubName}
   ${representativeName}さん
 
-  こんにちは、CSサークルです。
+  こんにちは、ooサークルです。
 
   キッチンカーでの販売、お疲れさまでした。
 
@@ -824,7 +824,7 @@ function club_sendFormEmail(email, clubName, representativeName) {
 
   よろしくお願いいたします。
 
-  CSサークル
+  ooサークル
   `;
 
   // HTMLメールとして送信

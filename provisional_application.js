@@ -198,10 +198,10 @@ function executeIndividualOriginalProcess(values, row) {
   const message =
     `<!channel>\n` +
     `*${name}* さんがキッチンカーの仮申請に *合格* しました！以下のURLから情報を確認し、リアクションスタンプで対応をお願いします。\n\n` +
-    `📌 *【CSサークル】* \n` +
+    `📌 *【ooサークル】* \n` +
     `　✅ 承認 → :cs_マル:\n` +
     `　❌ 却下 → :cs_バツ:\n\n` +
-    `📌 *【柴田さん】* \n` +
+    `📌 *【(施設責任者氏名)さん】* \n` +
     `　✅ 承認 → :管理者_マル:\n` +
     `　❌ 却下 → :管理者_バツ:\n\n` +
     `────────────────────────────────────\n` +
@@ -231,7 +231,7 @@ function generateIndividualRejectionMessage(caseType, name) {
         "残念ながら、選考の結果不合格となりました。\n" +
         "再挑戦を希望される場合は、問題文をよくお読みのうえ、再度ご応募いただけますと幸いです。\n\n" +
         "どうぞよろしくお願いいたします\n\n" +
-        "CSサークル"
+        "ooサークル"
       );
 
     case "no_responsible":
@@ -241,7 +241,7 @@ function generateIndividualRejectionMessage(caseType, name) {
         "残念ながら、食品衛生責任者の資格をお持ちでないため、選考の結果不合格となりました。\n" +
         "資格を取得された後、再度ご応募いただけますと幸いです。\n\n" +
         "どうぞよろしくお願いいたします\n\n" +
-        "CSサークル"
+        "ooサークル"
       );
 
     case "low_score":
@@ -251,7 +251,7 @@ function generateIndividualRejectionMessage(caseType, name) {
         "残念ながら、得点が基準に達していないため、選考の結果不合格となりました。\n" +
         "再挑戦を希望される場合は、マニュアルなどを参考にし、再度ご応募いただけますと幸いです。\n\n" +
         "どうぞよろしくお願いいたします\n\n" +
-        "CSサークル"
+        "ooサークル"
       );
 
     case "low_score_no_responsible":
@@ -261,7 +261,7 @@ function generateIndividualRejectionMessage(caseType, name) {
         "食品衛生責任者の資格をお持ちでないこと、また得点が基準に達していないことを考慮した結果、残念ながら不合格となりました。\n" +
         "資格を取得し、マニュアルなどをよくお読みの上、再挑戦していただけますと幸いです。\n\n" +
         "どうぞよろしくお願いいたします\n\n" +
-        "CSサークル"
+        "ooサークル"
       );
 
     default:
@@ -442,10 +442,10 @@ function executeClubOriginalProcess(values, row) {
   const message =
     `<!channel>\n` +
     `*${club_name}* がキッチンカーの仮申請に *合格* しました！以下のURLから情報を確認し、リアクションスタンプで対応をお願いします。\n\n` +
-    `📌 *【CSサークル】* \n` +
+    `📌 *【ooサークル】* \n` +
     `　✅ 承認 → :cs_マル:\n` +
     `　❌ 却下 → :cs_バツ:\n\n` +
-    `📌 *【柴田さん】* \n` +
+    `📌 *【(施設責任者氏名)さん】* \n` +
     `　✅ 承認 → :管理者_マル:\n` +
     `　❌ 却下 → :管理者_バツ:\n\n` +
     `────────────────────────────────────\n` +
@@ -475,7 +475,7 @@ function generateClubRejectionMessage(caseType, club_name, name) {
         "残念ながら、選考の結果不合格となりました。\n" +
         "再挑戦を希望される場合は、問題文をよくお読みのうえ、再度ご応募いただけますと幸いです。\n\n" +
         "どうぞよろしくお願いいたします\n\n" +
-        "CSサークル"
+        "ooサークル"
       );
 
     case "no_responsible":
@@ -485,7 +485,7 @@ function generateClubRejectionMessage(caseType, club_name, name) {
         "残念ながら、食品衛生責任者の資格をお持ちでないため、選考の結果不合格となりました。\n" +
         "資格を取得された後、再度ご応募いただけますと幸いです。\n\n" +
         "どうぞよろしくお願いいたします\n\n" +
-        "CSサークル"
+        "ooサークル"
       );
 
     case "low_score":
@@ -495,7 +495,7 @@ function generateClubRejectionMessage(caseType, club_name, name) {
         "残念ながら、得点が基準に達していないため、選考の結果不合格となりました。\n" +
         "再挑戦を希望される場合は、マニュアルなどを参考にし、再度ご応募いただけますと幸いです。\n\n" +
         "どうぞよろしくお願いいたします\n\n" +
-        "CSサークル"
+        "ooサークル"
       );
 
     case "low_score_no_responsible":
@@ -505,7 +505,7 @@ function generateClubRejectionMessage(caseType, club_name, name) {
         "食品衛生責任者の資格をお持ちでないこと、また得点が基準に達していないことを考慮した結果、残念ながら不合格となりました。\n" +
         "資格を取得し、マニュアルなどをよくお読みの上、再挑戦していただけますと幸いです。\n\n" +
         "どうぞよろしくお願いいたします\n\n" +
-        "CSサークル"
+        "ooサークル"
       );
 
     default:
