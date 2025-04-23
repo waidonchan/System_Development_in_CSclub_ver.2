@@ -95,6 +95,13 @@ function doPost(e) {
         );
       }
 
+      // 初回DM挨拶----------------
+      if (event && event.type === "team_join") {
+        const userId = event.user.id;
+        sendWelcomeMessage(userId);
+      }
+      // -------------------------
+
       // 他のイベントタイプがあればここに追加
       Logger.log("ℹ️ 未処理のイベントタイプ: " + event.type);
       return ContentService.createTextOutput(
@@ -880,5 +887,65 @@ function postSimpleSlackMessage(message) {
     }
   } catch (e) {
     Logger.log("Slack投稿エラー: " + e.message);
+  }
+}
+
+// 初回DM通知----------------------------
+function sendWelcomeMessage(userId) {
+  const token = getSlackToken(); // すでに共通関数があるので活用
+
+  try {
+    const imOpenResponse = UrlFetchApp.fetch(
+      "https://slack.com/api/conversations.open",
+      {
+        method: "post",
+        contentType: "application/json",
+        headers: { Authorization: "Bearer " + token },
+        payload: JSON.stringify({ users: userId }),
+        muteHttpExceptions: true,
+      }
+    );
+
+    const imData = JSON.parse(imOpenResponse.getContentText());
+    if (!imData.ok) {
+      Logger.log("❌ DMチャネル作成失敗: " + imData.error);
+      return;
+    }
+
+    const channelId = imData.channel.id;
+    const notionUrl = getProps().getProperty("WELCOME_GUIDE_URL"); // チャレサポくんガイド
+    const portalUrl = getProps().getProperty("CIRCLE_PORTAL_URL"); // サークルポータル
+    const meetingUrl = getProps().getProperty("MEETING_URL"); // ミーティングURL
+
+    const welcomeText =
+      `🎉 *ようこそ、ooサークルへ！*\n\n` +
+      `こんにちは！皆さんのサークル活動をサポートする *「チャレサポくん」* です 🤖\n` +
+      `これから活動がよりスムーズで楽しくなるように、お手伝いしていきます！\n\n` +
+      `📝 *まずはこちらをご確認ください！*\n` +
+      `・チャレサポくんの説明書（Notion）：\n${notionUrl}\n` +
+      `・サークル活動ポータルサイト：\n${portalUrl}\n` +
+      `・ミーティングURL(オンライン参加の場合はこちらから参加)：\n${meetingUrl}\n\n` +
+      `気軽に頼ってくださいね！今後ともよろしくお願いします 🌱✨`;
+
+    const messageResponse = UrlFetchApp.fetch(
+      "https://slack.com/api/chat.postMessage",
+      {
+        method: "post",
+        contentType: "application/json",
+        headers: { Authorization: "Bearer " + token },
+        payload: JSON.stringify({
+          channel: channelId,
+          text: welcomeText,
+        }),
+        muteHttpExceptions: true,
+      }
+    );
+
+    const messageResult = JSON.parse(messageResponse.getContentText());
+    if (!messageResult.ok) {
+      Logger.log("❌ ようこそメッセージ送信失敗: " + messageResult.error);
+    }
+  } catch (err) {
+    Logger.log("❌ sendWelcomeMessage() エラー: " + err.message);
   }
 }
