@@ -16,9 +16,9 @@
 ### 🗂️ ファイル構成の概要
 
 ```text
-📦 kitchen-car-gas-project/
- ┣ 📄 Code.gs ... メインスクリプト（個人・団体の処理含む）
- ┣ 📄 SlackNotification.gs ... Slack通知を送るためのサブ関数
+📦 application/
+ ┣ 📄 application.js ... メインスクリプト（個人・団体の処理含む）
+ ┣ 📄 slackApp.js ... Slack通知を送るためのサブ関数
  ┣ 📄 README.md ... このファイル
 ```
 

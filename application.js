@@ -13,7 +13,7 @@ function formatTime(rawTimeStr) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), "HH:mm");
 }
 
-// 列7が空欄の場合は個人用処理
+// 列7が「個人」の場合は個人用処理
 function onFormSubmit(e) {
   var club_or_individual = e.values[50]; // 列50が個人の場合は個人用処理
   if (club_or_individual.trim() === "個人") {
@@ -23,6 +23,31 @@ function onFormSubmit(e) {
     handleClubSubmission(e);
     Logger.log("団体用の通知を受け取りました");
   }
+}
+
+function endEmail() {
+  const sheet =
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName("リマインド");
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues(); // A〜I列
+
+  const today = new Date();
+
+  data.forEach((row, index) => {
+    const club_name = row[0]; // A列
+    const name = row[1]; // B列
+    const endDay = row[6]; // G列
+    const email = row[8]; // I列
+
+    if (areDatesEqual(new Date(endDay), today)) {
+      if (!club_name || club_name.trim() === "") {
+        individual_sendFormEmail(email, name);
+        Logger.log(`個人用メール送信：${name}`);
+      } else {
+        club_sendFormEmail(email, club_name, name);
+        Logger.log(`団体用メール送信：${club_name}の${name}`);
+      }
+    }
+  });
 }
 
 // 日付を文字列にフォーマット (例: yyyy-mm-dd)
@@ -332,10 +357,10 @@ function handleIndividualSubmit(e) {
 
   // メール本文を生成
   const subject = "キッチンカー出店に関して： " + representative_name + "さん";
-  const emailBody = `(提出先)課
+  const emailBody = `就職・生活支援課
   ご担当者様 (cc: ${representative_name}さん)
 
-  お世話になっております。△△大学 ooサークルです。
+  お世話になっております。福井県立大学 CSサークルです。
   
   この度、キッチンカー利用の申請をさせていただきたく、ご連絡いたしました。
 
@@ -343,14 +368,14 @@ function handleIndividualSubmit(e) {
 
   詳細につきましては、添付の資料をご確認いただけますと幸いです。
 
-  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。ooサークルおよび代表である${representative_name}さんが対応させていただきます。
+  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。CSサークルおよび代表である${representative_name}さんが対応させていただきます。
 
   よろしくお願いいたします。
 
-  ooサークル`;
+  CSサークル`;
 
   MailApp.sendEmail({
-    to: getProps().getProperty("UNIVERSITY_EMAIL"), // (提出先)課のメールアドレスに変更
+    to: getProps().getProperty("UNIVERSITY_EMAIL"), // 就職・生活支援課のメールアドレスに変更
     cc: contact_mail,
     subject: subject,
     body: emailBody,
@@ -359,9 +384,9 @@ function handleIndividualSubmit(e) {
 
   // メールの件名と本文をまとめて定義
   const newEmailSubject = `タイムスケジュール及び持ち物チェックリスト作成のお願い： ${representative_name}`;
-  const newEmailBody = `${representative_name}さん （cc:(施設責任者氏名)代表）
+  const newEmailBody = `${representative_name}さん （cc:柴田代表）
 
-  こんにちは、ooサークルです。
+  こんにちは、CSサークルです。
 
   資料作成フォームにご記入いただき、ありがとうございます。
 
@@ -371,43 +396,25 @@ function handleIndividualSubmit(e) {
 
   記入が完了しましたら、このメールへの返信にてお知らせください。
 
-  参考までに、(提出先)課に提出したPDFを添付いたします。
+  参考までに、就職・生活支援課に提出したPDFを添付いたします。
 
-  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。ooサークルおよびキッチンカー利用の責任者である(施設責任者氏名)代表が対応いたします。
+  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。CSサークルおよびキッチンカー利用の責任者である柴田代表が対応いたします。
 
   よろしくお願いいたします。
 
-  ooサークル`;
+  CSサークル`;
 
   // 新しいメールを送信
   MailApp.sendEmail({
     to: contact_mail,
-    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //(施設責任者氏名)代表のメールアドレス
+    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //柴田代表のメールアドレス
     subject: newEmailSubject,
     body: newEmailBody,
     attachments: [pdfFile],
   });
 }
 
-function endEmail() {
-  var sheet =
-    SpreadsheetApp.getActiveSpreadsheet().getSheetByName("リマインド");
-  var today = new Date();
-  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
-
-  data.forEach(function (row) {
-    var representativeName = row[1]; // B列：代表者名
-    var endDay = row[6]; // G列：終了日（文字列）
-    var email = row[8]; // I列：連絡先メールアドレス
-
-    // endDayの通知
-    if (areDatesEqual(new Date(endDay), today)) {
-      sendFormEmail(email, representativeName); // フォーム記入依頼のメールを送信
-    }
-  });
-}
-
-function sendFormEmail(email, representativeName) {
+function individual_sendFormEmail(email, representativeName) {
   // スクリプトプロパティからフォームURLを取得
   const individual_formUrl = getProps().getProperty(
     "INDIVIDUAL_SUBMISSION_FORM_URL"
@@ -416,7 +423,7 @@ function sendFormEmail(email, representativeName) {
   var bodyText = `
   ${representativeName}さん
 
-  こんにちは、ooサークルです。
+  こんにちは、CSサークルです。
 
   キッチンカーでの販売、お疲れさまでした。
 
@@ -430,7 +437,7 @@ function sendFormEmail(email, representativeName) {
 
   よろしくお願いいたします。
 
-  ooサークル
+  CSサークル
   `;
 
   // HTMLメールとして送信
@@ -442,10 +449,6 @@ function sendFormEmail(email, representativeName) {
     body: bodyText, // プレーンテキストの本文
     htmlBody: htmlBody, // HTML形式の本文
   });
-}
-
-function areDatesEqual(date1, date2) {
-  return date1.toDateString() === date2.toDateString();
 }
 
 // ------------------------------------団体用-----------------------------------------------
@@ -741,10 +744,10 @@ function handleClubSubmission(e) {
 
   // メール本文を生成
   const subject = "キッチンカー出店に関して： " + club_name;
-  const emailBody = `(提出先)課
+  const emailBody = `就職・生活支援課
   ご担当者様 (cc: ${club_name} ${representative_name}さん)
 
-  お世話になっております。△△大学 ooサークルです。
+  お世話になっております。福井県立大学 CSサークルです。
   
   この度、キッチンカー利用の申請をさせていただきたく、ご連絡いたしました。
 
@@ -752,14 +755,14 @@ function handleClubSubmission(e) {
 
   詳細につきましては、添付の資料をご確認いただけますと幸いです。
 
-  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。ooサークルおよび${club_name}の代表である${representative_name}さんが対応させていただきます。
+  また、ご不明点やご質問がございましたら、このメールへの返信にてお知らせください。CSサークルおよび${club_name}の代表である${representative_name}さんが対応させていただきます。
 
   よろしくお願いいたします。
 
-  ooサークル`;
+  CSサークル`;
 
   MailApp.sendEmail({
-    to: getProps().getProperty("UNIVERSITY_EMAIL"), // (提出先)課のメールアドレスに変更
+    to: getProps().getProperty("UNIVERSITY_EMAIL"), // 就職・生活支援課のメールアドレスに変更
     cc: contact_mail,
     subject: subject,
     body: emailBody,
@@ -769,9 +772,9 @@ function handleClubSubmission(e) {
   // メールの件名と本文をまとめて定義
   const newEmailSubject = `タイムスケジュール及び持ち物チェックリスト作成のお願い： ${club_name}`;
   const newEmailBody = `${club_name}
-  ${representative_name}さん （cc:(施設責任者氏名)代表）
+  ${representative_name}さん （cc:柴田代表）
 
-  こんにちは、ooサークルです。
+  こんにちは、CSサークルです。
 
   資料作成フォームにご記入いただき、ありがとうございます。
 
@@ -781,44 +784,25 @@ function handleClubSubmission(e) {
 
   記入が完了しましたら、このメールへの返信にてお知らせください。
 
-  参考までに、(提出先)課に提出したPDFを添付いたします。
+  参考までに、就職・生活支援課に提出したPDFを添付いたします。
 
-  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。ooサークルおよびキッチンカー利用の責任者である(施設責任者氏名)代表が対応させていただきます。
+  また、キッチンカーのご利用に際してご質問がある場合も、このメールへの返信にてお問い合わせください。CSサークルおよびキッチンカー利用の責任者である柴田代表が対応させていただきます。
 
   よろしくお願いいたします。
 
-  ooサークル`;
+  CSサークル`;
 
   // 新しいメールを送信
   MailApp.sendEmail({
     to: contact_mail,
-    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //(施設責任者氏名)代表のメールアドレス
+    cc: getProps().getProperty("ADMINISTRATOR_EMAIL"), //柴田代表のメールアドレス
     subject: newEmailSubject,
     body: newEmailBody,
     attachments: [pdfFile],
   });
 }
 
-function endEmail() {
-  var sheet =
-    SpreadsheetApp.getActiveSpreadsheet().getSheetByName("リマインド");
-  var today = new Date();
-  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
-
-  data.forEach(function (row) {
-    var clubName = row[0]; // A列：団体名
-    var representativeName = row[1]; // B列：代表者名
-    var endDay = row[6]; // G列：終了日（文字列）
-    var email = row[8]; // I列：連絡先メールアドレス
-
-    // endDayの通知
-    if (areDatesEqual(new Date(endDay), today)) {
-      sendFormEmail(email, clubName, representativeName); // フォーム記入依頼のメールを送信
-    }
-  });
-}
-
-function sendFormEmail(email, clubName, representativeName) {
+function club_sendFormEmail(email, clubName, representativeName) {
   // スクリプトプロパティからフォームURLを取得
   const club_formUrl = getProps().getProperty("CLUB_SUBMISSION_FORM_URL");
 
@@ -826,7 +810,7 @@ function sendFormEmail(email, clubName, representativeName) {
   ${clubName}
   ${representativeName}さん
 
-  こんにちは、ooサークルです。
+  こんにちは、CSサークルです。
 
   キッチンカーでの販売、お疲れさまでした。
 
@@ -840,7 +824,7 @@ function sendFormEmail(email, clubName, representativeName) {
 
   よろしくお願いいたします。
 
-  ooサークル
+  CSサークル
   `;
 
   // HTMLメールとして送信
