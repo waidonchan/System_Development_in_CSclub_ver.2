@@ -13,7 +13,7 @@ function formatTime(rawTimeStr) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), "HH:mm");
 }
 
-// 列7が空欄の場合は個人用処理
+// 列7が「個人」の場合は個人用処理
 function onFormSubmit(e) {
   var club_or_individual = e.values[50]; // 列50が個人の場合は個人用処理
   if (club_or_individual.trim() === "個人") {
@@ -23,6 +23,31 @@ function onFormSubmit(e) {
     handleClubSubmission(e);
     Logger.log("団体用の通知を受け取りました");
   }
+}
+
+function endEmail() {
+  const sheet =
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName("リマインド");
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues(); // A〜I列
+
+  const today = new Date();
+
+  data.forEach((row, index) => {
+    const club_name = row[0]; // A列
+    const name = row[1]; // B列
+    const endDay = row[6]; // G列
+    const email = row[8]; // I列
+
+    if (areDatesEqual(new Date(endDay), today)) {
+      if (!club_name || club_name.trim() === "") {
+        individual_sendFormEmail(email, name);
+        Logger.log(`個人用メール送信：${name}`);
+      } else {
+        club_sendFormEmail(email, club_name, name);
+        Logger.log(`団体用メール送信：${club_name}の${name}`);
+      }
+    }
+  });
 }
 
 // 日付を文字列にフォーマット (例: yyyy-mm-dd)
@@ -389,25 +414,7 @@ function handleIndividualSubmit(e) {
   });
 }
 
-function endEmail() {
-  var sheet =
-    SpreadsheetApp.getActiveSpreadsheet().getSheetByName("リマインド");
-  var today = new Date();
-  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
-
-  data.forEach(function (row) {
-    var representativeName = row[1]; // B列：代表者名
-    var endDay = row[6]; // G列：終了日（文字列）
-    var email = row[8]; // I列：連絡先メールアドレス
-
-    // endDayの通知
-    if (areDatesEqual(new Date(endDay), today)) {
-      sendFormEmail(email, representativeName); // フォーム記入依頼のメールを送信
-    }
-  });
-}
-
-function sendFormEmail(email, representativeName) {
+function individual_sendFormEmail(email, representativeName) {
   // スクリプトプロパティからフォームURLを取得
   const individual_formUrl = getProps().getProperty(
     "INDIVIDUAL_SUBMISSION_FORM_URL"
@@ -442,10 +449,6 @@ function sendFormEmail(email, representativeName) {
     body: bodyText, // プレーンテキストの本文
     htmlBody: htmlBody, // HTML形式の本文
   });
-}
-
-function areDatesEqual(date1, date2) {
-  return date1.toDateString() === date2.toDateString();
 }
 
 // ------------------------------------団体用-----------------------------------------------
@@ -799,26 +802,7 @@ function handleClubSubmission(e) {
   });
 }
 
-function endEmail() {
-  var sheet =
-    SpreadsheetApp.getActiveSpreadsheet().getSheetByName("リマインド");
-  var today = new Date();
-  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
-
-  data.forEach(function (row) {
-    var clubName = row[0]; // A列：団体名
-    var representativeName = row[1]; // B列：代表者名
-    var endDay = row[6]; // G列：終了日（文字列）
-    var email = row[8]; // I列：連絡先メールアドレス
-
-    // endDayの通知
-    if (areDatesEqual(new Date(endDay), today)) {
-      sendFormEmail(email, clubName, representativeName); // フォーム記入依頼のメールを送信
-    }
-  });
-}
-
-function sendFormEmail(email, clubName, representativeName) {
+function club_sendFormEmail(email, clubName, representativeName) {
   // スクリプトプロパティからフォームURLを取得
   const club_formUrl = getProps().getProperty("CLUB_SUBMISSION_FORM_URL");
 

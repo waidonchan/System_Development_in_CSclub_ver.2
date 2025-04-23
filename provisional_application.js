@@ -34,7 +34,7 @@ function handleIndividualSubmission(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
 
   // 条件分岐の処理
-  if (score === 1 && responsible === "はい" && quiz === "") {
+  if (score === 33 && responsible === "はい" && quiz === "") {
     // ★ 33点満点、responsibleが「はい」、quizが空欄の場合：元の処理を実行
     try {
       executeIndividualOriginalProcess(values, row);
@@ -43,7 +43,11 @@ function handleIndividualSubmission(e) {
         "❌ executeIndividualOriginalProcess 実行中にエラー: " + err.message
       );
     }
-  } else if (score === 1 && responsible === "はい" && quiz === "読みました。") {
+  } else if (
+    score === 33 &&
+    responsible === "はい" &&
+    quiz === "読みました。"
+  ) {
     // ★ 33点満点、responsibleが「はい」、quizが「読みました。」の場合：行の色をグレーにし、不合格通知をメールで送信
     sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
     sendMail(
@@ -51,7 +55,7 @@ function handleIndividualSubmission(e) {
       "仮申請審査結果：不合格",
       generateIndividualRejectionMessage("quiz_failed", name)
     );
-  } else if (score === 1 && responsible === "いいえ") {
+  } else if (score === 33 && responsible === "いいえ") {
     // ★ 33点満点、responsibleが「いいえ」の場合：行の色をグレーにし、不合格通知をメールで送信
     sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
     sendMail(
@@ -59,7 +63,7 @@ function handleIndividualSubmission(e) {
       "仮申請審査結果：不合格",
       generateIndividualRejectionMessage("no_responsible", name)
     );
-  } else if (score < 1 && responsible === "はい") {
+  } else if (score < 33 && responsible === "はい") {
     // ★ 33点未満、responsibleが「はい」の場合：行の色をグレーにし、不合格通知をメールで送信
     sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
     sendMail(
@@ -67,7 +71,7 @@ function handleIndividualSubmission(e) {
       "仮申請審査結果：不合格",
       generateIndividualRejectionMessage("low_score", name)
     );
-  } else if (score < 1 && responsible === "いいえ") {
+  } else if (score < 33 && responsible === "いいえ") {
     // ★ 33点未満、responsibleが「いいえ」の場合：行の色をグレーにし、不合格通知をメールで送信
     sheet.getRange(row, 1, 1, sheet.getLastColumn()).setBackground("gray");
     sendMail(

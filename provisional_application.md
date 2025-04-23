@@ -10,7 +10,7 @@
 
 ---
 
-## 🛠 構成ファイル
+## 🛠 構成
 
 - `onFormSubmit(e)`: フォーム送信時のエントリーポイント
 - `handleIndividualSubmission(e)`: 個人申請の分岐ロジック
