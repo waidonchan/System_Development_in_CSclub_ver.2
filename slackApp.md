@@ -6,6 +6,7 @@
 - 未承認申請の定期リマインド
 - スプレッドシート行の背景色変更（承認＝緑／却下＝赤）
 - 自動メール送信（代表者＋管理者）
+- 新しく slack チャンネルに加入した人に DM でメッセージ
 
 ---
 
@@ -14,15 +15,14 @@
 - Google Apps Script (GAS)
 - Slack API（chat.postMessage, reaction_added, reaction_removed）
 - Google スプレッドシート
-- Gmail API（MailApp）
 
 ---
 
 ## 📂 ファイル構成
 
 ```
-📁 src/
-└── Code.gs         // メインスクリプト（Slack受信、通知処理、リマインド管理など）
+📁 slackApp/
+└── slackApp.js         // メインスクリプト（Slack受信、通知処理、リマインド管理など）
 ```
 
 ---
